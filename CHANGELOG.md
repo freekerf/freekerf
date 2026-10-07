@@ -30,3 +30,8 @@ All notable changes to FreeKerf are documented here. The format follows
   `config`, `actions`, `run`.
 - Documentation: `AGENTS.md`, architecture, ADRs 0001-0005, feature pages,
   divergences from LaserGRBL, coverage, benchmarks, roadmap.
+
+### Fixed
+
+- Custom code: `[jogstep]` and `[jogspeed]` are evaluated (the jog settings), as in
+  LaserGRBL; they were left unevaluated.

@@ -17,11 +17,12 @@ What was postponed, and open decisions. Milestones are in [PLAN.md](../PLAN.md) 
 
 ## Decided
 
+- UI toolkit: Tauri 2, desktop first (ADR 0006). Multi-touch problems found on Linux are listed here when they appear and handled later.
+
 - No auto-update for now (PLAN §14).
 - No MCP prompts for now (PLAN §14).
 
 ## Open
 
-- UI toolkit: Flutter + flutter_rust_bridge v2 is **proposed** (ADR 0006). Experiments A (canvas stress), B (IPC latency) and C (Wayland multi-touch) from `doc/research/ui-toolkit.md` §8 decide it; ~40 h on Linux with Intel and NVIDIA GPUs.
 
 - MCP: should `allow_laser` exist at all (PLAN §15)?

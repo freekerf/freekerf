@@ -18,7 +18,8 @@ Each non-empty line is processed in order:
 
 Expressions: numbers (`1e-3` too), `+ - * / ^`, parentheses, unary minus, `abs`,
 `neg`, `sign`. Variables: `left right top bottom width height` (drawing range of
-the loaded program, 0 without one), `WCO.X/Y/Z`, `MPos.X/Y/Z`, `WPos.X/Y/Z` (work
+the loaded program, 0 without one), `jogstep` and `jogspeed` (the jog settings
+`jog.step_mm`, `jog.speed_mm_min`), `WCO.X/Y/Z`, `MPos.X/Y/Z`, `WPos.X/Y/Z` (work
 position, DIV-101), every numeric `$N` of the board settings (`$30` defaults to
 1000).
 
@@ -27,12 +28,14 @@ Defaults: header `G90 (use absolute coordinates)`, footer
 
 ## Configuration
 
-`job.header`, `job.passes`, `job.footer`.
+`job.header`, `job.passes`, `job.footer`; `jog.step_mm` and `jog.speed_mm_min`
+for `[jogstep]` and `[jogspeed]`.
 
 ## Tests
 
 `expr.rs` unit tests, `host_behaviour.rs::custom_header_and_footer_with_expressions_and_immediates`,
-`work_position_variables_are_the_work_position`, `loop_count_repeats_the_program_with_the_passes_code`.
+`work_position_variables_are_the_work_position`, `custom_code_sees_the_jog_step_and_speed`,
+`loop_count_repeats_the_program_with_the_passes_code`; conformance `tests/protocol/test_jobs.py`.
 
 ## Divergences
 

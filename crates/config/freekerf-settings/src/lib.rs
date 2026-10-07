@@ -347,6 +347,8 @@ impl Settings {
                 on_ms: m.auto_cooling.on_s * 1000,
                 off_ms: m.auto_cooling.off_s * 1000,
             }),
+            jog_step_mm: self.jog.step_mm,
+            jog_speed_mm_min: self.jog.speed_mm_min,
             last_known_version: None,
             last_known_settings: None,
         }
@@ -547,7 +549,10 @@ mod tests {
         s.machine.auto_cooling.enabled = true;
         s.machine.status_query_ms = 1;
         s.machine.firmware = Firmware::Marlin;
+        s.jog.step_mm = 2.5;
+        s.jog.speed_mm_min = 1200.0;
         let o = s.host_options();
+        assert_eq!((o.jog_step_mm, o.jog_speed_mm_min), (2.5, 1200.0));
         assert_eq!(
             o.auto_cooling,
             Some(AutoCooling {

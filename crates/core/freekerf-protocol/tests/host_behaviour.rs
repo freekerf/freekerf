@@ -121,6 +121,28 @@ fn custom_header_and_footer_with_expressions_and_immediates() {
 }
 
 #[test]
+fn custom_code_sees_the_jog_step_and_speed() {
+    // LaserGRBL's [jogstep] and [jogspeed] (conformance
+    // test_jobs.py::test_custom_code_expressions_see_the_jog_step_and_speed)
+    let opts = HostOptions {
+        jog_step_mm: 2.5,
+        jog_speed_mm_min: 1200.0,
+        ..HostOptions::default()
+    };
+    let mut b = Bench::with(opts, DeviceConfig::default());
+    b.connect();
+    assert_eq!(
+        b.host.evaluate_expression("X[jogstep*2] F[jogspeed]"),
+        "X5.000 F1200.000"
+    );
+    b.host
+        .execute_custom_code("G1 X[jogstep] F[jogspeed]", b.now)
+        .unwrap();
+    b.exchange();
+    assert_eq!(b.lines().last().unwrap(), "G1X2.500F1200.000");
+}
+
+#[test]
 fn errors_are_counted_and_decoded_in_the_console() {
     let mut b = connected();
     b.device.config_mut().error_rules = vec![(regex::Regex::new("X2").unwrap(), 2)];

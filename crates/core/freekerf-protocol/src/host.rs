@@ -95,6 +95,10 @@ pub struct HostOptions {
     pub support_pwm: bool,
     /// Automatic cooling cycles, off when `None`.
     pub auto_cooling: Option<AutoCooling>,
+    /// Jog step of the jog panel, mm (`[jogstep]` in custom code).
+    pub jog_step_mm: f64,
+    /// Jog speed of the jog panel, mm/min (`[jogspeed]` in custom code).
+    pub jog_speed_mm_min: f64,
     /// Version of the last board seen (used until the banner arrives).
     pub last_known_version: Option<FirmwareVersion>,
     /// Settings table of the last board seen.
@@ -114,6 +118,8 @@ impl Default for HostOptions {
             custom_footer: DEFAULT_FOOTER.to_owned(),
             support_pwm: true,
             auto_cooling: None,
+            jog_step_mm: 1.0,
+            jog_speed_mm_min: 1000.0,
             last_known_version: None,
             last_known_settings: None,
         }
@@ -548,6 +554,8 @@ impl Core {
             ("bottom", f(bottom)),
             ("width", f(right - left)),
             ("height", f(top - bottom)),
+            ("jogstep", self.opts.jog_step_mm),
+            ("jogspeed", self.opts.jog_speed_mm_min),
             ("WCO.X", f64::from(self.wco.x)),
             ("WCO.Y", f64::from(self.wco.y)),
             ("WCO.Z", f64::from(self.wco.z)),

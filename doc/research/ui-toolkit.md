@@ -1,6 +1,6 @@
 # UI toolkit research (M3)
 
-> **Status:** desk research, received 2026-10-07 from a web-research agent with no access to this repository. It replaces the code spike originally planned for M3. Its recommendation is recorded as a **proposal** in [ADR 0006](../adr/0006-ui-toolkit.md); the decision is final only after the experiments in §8 run.
+> **Status:** desk research, received 2026-10-07 from a web-research agent with no access to this repository. It replaces the code spike originally planned for M3. Its recommendation (Flutter) was **not adopted**: the product decision is Tauri 2, desktop first, with gesture problems deferred ([ADR 0006](../adr/0006-ui-toolkit.md)). The report is kept as background for the risks it lists.
 >
 > **Read §0 first.** The original report came without a source list, and spot checks found factual errors in some of its supporting evidence. The report body (§1–§10) is kept as received, reformatted to Markdown; the corrections in §0 take precedence over it.
 
@@ -20,7 +20,7 @@ Consequences for the decision:
 - The strongest arguments left for Flutter are **one self-contained renderer on every Linux distribution** (independent of the system WebKitGTK version), **gestures handled in-app**, and **Android with USB host**. They are plausible but not measured for our workload.
 - The case against Tauri rests on **WebKitGTK canvas/WebGL stability on Linux** (NVIDIA, Wayland) and touch through WebKit. That is a known risk in `design/tech-notes.md`, but this report gives **no measured numbers** for it.
 - The "20,000 elements at 28 FPS / 0.48 W" Impeller figure and the "450 ms → 11 ms" clipping figure have no source and are not Linux desktop numbers: do not quote them as evidence.
-- Experiments A–C (§8) are therefore **required**, not optional, before ADR 0006 is accepted.
+- ADR 0006 chose Tauri 2 without running experiments A–C; canvas performance on Linux is checked in M4 instead.
 
 ---
 
@@ -117,7 +117,7 @@ Conclusion of the report: strong for shared logic on mobile, ill-suited as the d
 | Canvas repaint jank with 20k paths | High | Two layers: the static scene (paths + image) rendered to a cached GPU picture (`Picture.toImage()`), panned/zoomed as a transformed texture and re-rasterized at rest; the 60 Hz laser head on its own `RepaintBoundary`. |
 | Flutter Web size for the remote iPad | Medium | Do not use Flutter Web: the Rust core serves a lightweight HTML5/WebGL page over HTTP/WebSocket for the remote client. |
 
-## 8. Remaining validation (required before accepting ADR 0006)
+## 8. Remaining validation (not required after ADR 0006; kept for reference)
 
 | | Experiment A — canvas stress | Experiment B — IPC latency | Experiment C — Wayland multi-touch |
 | --- | --- | --- | --- |
