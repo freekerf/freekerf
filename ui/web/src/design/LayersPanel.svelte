@@ -1,9 +1,9 @@
 <script lang="ts">
   // The layers panel (design/design-system.md "Camadas"): one row per colour layer
-  // in output order; expand to edit mode, speed, power, passes and (fillings) the
-  // hatch pattern and lines per mm; show or hide;
+  // in output order; expand to edit mode, laser command (M3/M4), speed, power,
+  // passes and (fillings) the hatch pattern and lines per mm; show or hide;
   // move in the output order. Every change is one `document.*` action.
-  import type { FillPattern, LayerMode } from '../gen/api';
+  import type { FillPattern, LaserMode, LayerMode } from '../gen/api';
   import { app } from '../context';
   import { t } from '../i18n/index.svelte';
   import Icon from '../lib/Icon.svelte';
@@ -20,7 +20,7 @@
   const count = (l: Layer) => l.objects;
   const update = (
     id: number,
-    patch: Partial<Pick<Layer, 'mode' | 'speed_mm_min' | 'power' | 'passes' | 'visible'>> & {
+    patch: Partial<Pick<Layer, 'mode' | 'speed_mm_min' | 'power' | 'passes' | 'visible' | 'laser_mode'>> & {
       lines_per_mm?: number;
       fill_pattern?: FillPattern;
     },
@@ -42,6 +42,12 @@
   ];
   const current = (id: number) => run(() => doc.service.dispatch('document.set_current_layer', { id }));
   const move = (id: number, to: number) => run(() => doc.service.dispatch('document.move_layer', { id, to }));
+  /** M3 or M4: a layer following the machine (`M3` in the app) shows as M3. */
+  const LASER: [LaserMode, string][] = [
+    ['constant', 'layers-laser-constant'],
+    ['dynamic', 'layers-laser-dynamic'],
+  ];
+  const laserOf = (l: Layer): LaserMode => (l.laser_mode === 'dynamic' ? 'dynamic' : 'constant');
 </script>
 
 <p class="panel-sub layers-order">{t('layers-order')}</p>
@@ -95,6 +101,23 @@
                 aria-checked={l.mode === m}
                 class:on={l.mode === m}
                 onclick={() => update(l.id, { mode: m as LayerMode })}><span>{t(modeLabel(m))}</span></button
+              >
+            {/each}
+          </div>
+          <div
+            class="seg"
+            role="radiogroup"
+            aria-label={t('layers-laser')}
+            title={t('layers-laser-hint')}
+            data-testid="layer-laser"
+          >
+            {#each LASER as [m, label] (m)}
+              <button
+                role="radio"
+                data-laser={m}
+                aria-checked={laserOf(l) === m}
+                class:on={laserOf(l) === m}
+                onclick={() => update(l.id, { laser_mode: m })}><span>{t(label)}</span></button
               >
             {/each}
           </div>

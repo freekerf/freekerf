@@ -32,7 +32,7 @@ pub use image::{
     Adjustments, Bytes, CenterlineSettings, DitherMode, GrayFormula, ImageData, ImageEdit, ImageObject,
     Interpolation, LineDirection, RasterSettings, RasterTool, VectorFill, VectorizeSettings,
 };
-pub use layer::{Color, FillSettings, Layer, LayerId, LayerMode};
+pub use layer::{Color, FillSettings, LaserMode, Layer, LayerId, LayerMode};
 pub use object::{
     Object, ObjectId, ObjectKind, Source, SourceFormat, TextSpec, UnsupportedReason, ellipse_path, rect_path,
 };
@@ -40,7 +40,7 @@ pub use object::{
 /// Value of the `format` field of a project file.
 pub const FORMAT: &str = "freekerf-project";
 /// Current version of the project file.
-pub const VERSION: u32 = 2;
+pub const VERSION: u32 = 3;
 
 /// Errors of documents and project files.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -312,6 +312,9 @@ impl Document {
         // migrations, step by step:
         // 1 -> 2: objects may carry `text` (editable text) and `transform`; both are
         //         optional, so nothing changes in `value`
+        // 2 -> 3: layers may carry `laser_mode` (`machine` when absent), so nothing
+        //         changes either; the version keeps older FreeKerf from planning a
+        //         dynamic-power layer with the machine's command
         let mut doc: Self =
             serde_json::from_value(value).map_err(|e| DocumentError::Invalid(e.to_string()))?;
         doc.version = VERSION;
@@ -453,12 +456,12 @@ mod tests {
         assert!(d.objects[1].bounds().is_empty());
 
         let mut v: serde_json::Value = serde_json::from_str(&text).unwrap();
-        v["version"] = 3.into();
+        v["version"] = (VERSION + 1).into();
         assert_eq!(
             Document::from_fkproj(v.to_string().as_bytes()),
             Err(DocumentError::TooNew {
-                found: 3,
-                supported: 2
+                found: VERSION + 1,
+                supported: VERSION
             })
         );
         v["version"] = serde_json::Value::Null;
@@ -489,6 +492,26 @@ mod tests {
                 .next_object_id,
             4
         );
+    }
+
+    #[test]
+    fn version_2_files_open_as_version_3_with_the_machine_laser_mode() {
+        let v2 = r##"{"format": "freekerf-project", "version": 2,
+            "layers": [{"id": 1, "color": "#000000", "speed_mm_min": 1000, "power": 1000}],
+            "objects": [], "next_object_id": 1}"##;
+        let d = Document::from_fkproj(v2.as_bytes()).unwrap();
+        assert_eq!(d.version, VERSION);
+        assert_eq!(d.layers[0].laser_mode, LaserMode::Machine);
+        // the default is left out; a chosen mode is kept
+        assert!(!d.to_fkproj().contains("laser_mode"));
+        let mut m4 = d;
+        m4.layers[0].laser_mode = LaserMode::Dynamic;
+        let text = m4.to_fkproj();
+        assert!(text.contains("\"laser_mode\": \"dynamic\""), "{text}");
+        assert_eq!(Document::from_fkproj(text.as_bytes()).unwrap(), m4);
+        assert_eq!(LaserMode::Dynamic.command(), Some("M4"));
+        assert_eq!(LaserMode::Constant.command(), Some("M3"));
+        assert_eq!(LaserMode::Machine.command(), None);
     }
 
     #[test]

@@ -246,9 +246,23 @@ pub fn plan_vectors(doc: &Document, options: &PlanOptions) -> Result<Vec<String>
         style,
         pen_down: style == VectorStyle::Svg,
     };
+    // the laser on command of each layer (`M3`/`M4`), the first one from the start
+    let order = doc.execution_order();
+    let laser_on = |l: &Layer| {
+        l.laser_mode
+            .command()
+            .unwrap_or(&options.machine.laser_on)
+            .to_owned()
+    };
+    if let Some(first) = order.first() {
+        e.w.set_laser_on(&laser_on(first), false);
+    }
     e.w.initial();
-    for layer in doc.execution_order() {
+    for layer in order {
         let objects: Vec<_> = doc.objects_on(layer.id).collect();
+        if !objects.is_empty() {
+            e.w.set_laser_on(&laser_on(layer), true);
+        }
         let filling = if layer.mode.has_fill() {
             Some(filling(doc, layer, style)?)
         } else {
@@ -350,6 +364,50 @@ mod tests {
         assert_eq!(lines[5], "G1X10F1000(path)");
         assert!(lines.iter().any(|l| l.starts_with("G3X30Y5I-5J0")));
         assert_eq!(lines.last().unwrap(), "M5 S0");
+    }
+
+    #[test]
+    fn laser_mode_per_layer() {
+        use freekerf_document::LaserMode;
+        // a dynamic-power line layer, then a constant-power cut layer
+        let mut d = doc(SourceFormat::Svg, LayerMode::Line);
+        d.layers[0].laser_mode = LaserMode::Dynamic;
+        let cut = d.layer_for_color(Color::rgb(255, 0, 0), 300, 1000);
+        d.layer_mut(cut).unwrap().mode = LayerMode::Cut;
+        d.layer_mut(cut).unwrap().laser_mode = LaserMode::Constant;
+        d.add_object(
+            cut,
+            ObjectKind::Shape {
+                paths: vec![square(50.0)],
+            },
+        )
+        .unwrap();
+        let lines = plan_vectors(&d, &PlanOptions::default()).unwrap();
+        // the first layer's command from the start, the next one when its layer begins
+        assert_eq!(lines[0], "M4 S0");
+        let cut_at = lines
+            .iter()
+            .position(|l| l.starts_with("(Layer #FF0000"))
+            .unwrap();
+        assert_eq!(lines[cut_at - 1], "M3");
+        assert_eq!(lines.iter().filter(|l| *l == "M3" || *l == "M4").count(), 1);
+        // the machine's command when the layers leave it (unchanged output)
+        let mut options = PlanOptions::default();
+        options.machine.laser_on = "M4".into();
+        d.layers
+            .iter_mut()
+            .for_each(|l| l.laser_mode = LaserMode::Machine);
+        let lines = plan_vectors(&d, &options).unwrap();
+        assert_eq!(lines[0], "M4 S0");
+        assert!(!lines.iter().any(|l| l == "M3" || l == "M4"));
+        // without PWM, pen down writes the layer's command
+        let mut d = doc(SourceFormat::Svg, LayerMode::Line);
+        d.layers[0].laser_mode = LaserMode::Dynamic;
+        let mut options = PlanOptions::default();
+        options.machine.support_pwm = false;
+        let lines = plan_vectors(&d, &options).unwrap();
+        assert!(lines.iter().any(|l| l.starts_with("M4")), "{lines:?}");
+        assert!(!lines.iter().any(|l| l.starts_with("M3")), "{lines:?}");
     }
 
     #[test]

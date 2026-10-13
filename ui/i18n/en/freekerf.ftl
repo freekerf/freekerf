@@ -85,6 +85,10 @@ layers-pattern-squares = Diamonds
 layers-pattern-zig_zag = Zig-zag
 layers-pattern-hilbert = Hilbert curve
 layers-pattern-inset = Concentric (inset)
+layers-laser = Laser
+layers-laser-constant = M3 constant
+layers-laser-dynamic = M4 dynamic
+layers-laser-hint = M3: the same power everywhere (cutting). M4: power follows the speed in Grbl laser mode ($32=1), so corners and accelerations do not burn darker (engraving, fillings).
 layers-interval = Line interval
 layers-air = Air assist
 layers-material = Apply a material from the library…

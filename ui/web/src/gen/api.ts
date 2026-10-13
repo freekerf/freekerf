@@ -15,6 +15,8 @@ export type AddLayerParams = {
   color: Color;
   /** Filling pattern. */
   fill_pattern?: FillPattern | null;
+  /** Laser on command: `machine` (the machine's), `constant` (`M3`) or `dynamic` (`M4`). */
+  laser_mode?: LaserMode | null;
   /** Filling lines per mm. */
   lines_per_mm?: number | null;
   /** `line`, `fill`, `fill_and_line`, `cut` or `ignore`. */
@@ -807,6 +809,9 @@ export type LaserLifeCounter = {
   run_ms: number;
 };
 
+/** How the laser is switched on for a layer's moves. */
+export type LaserMode = "machine" | "constant" | "dynamic";
+
 /** A colour layer: the objects of one colour and how to engrave or cut them. */
 export type Layer = {
   /** Colour that groups the objects. */
@@ -815,6 +820,11 @@ export type Layer = {
   fill?: FillSettings;
   /** Identifier. */
   id: LayerId;
+  /**
+   * Laser on command (`M3` constant or `M4` dynamic power); by default the
+   * machine's.
+   */
+  laser_mode?: LaserMode;
   /** Processing mode. */
   mode?: LayerMode;
   /** Display name (the colour when empty). */
@@ -855,6 +865,11 @@ export type LayerSummary = {
   fill: FillSettings;
   /** Id. */
   id: number;
+  /**
+   * Laser on command: `machine` (the machine's, `M3`), `constant` (`M3`) or
+   * `dynamic` (`M4`).
+   */
+  laser_mode: LaserMode;
   /** Mode (`line`, `fill`, `fill_and_line`, `cut`, `ignore`). */
   mode: LayerMode;
   /** Name. */
@@ -1622,6 +1637,8 @@ export type UpdateLayerParams = {
   fill_pattern?: FillPattern | null;
   /** Layer id. */
   id: number;
+  /** Laser on command: `machine` (the machine's), `constant` (`M3`) or `dynamic` (`M4`). */
+  laser_mode?: LaserMode | null;
   /** Filling lines per mm. */
   lines_per_mm?: number | null;
   /** `line`, `fill`, `fill_and_line`, `cut` or `ignore`. */
@@ -2052,7 +2069,7 @@ export interface Actions {
     result: Changed;
     tier: "edit";
   };
-  /** Changes a layer's name, mode, speed, power, passes, visibility or filling. One undo step. */
+  /** Changes a layer's name, mode, speed, power, passes, visibility, filling or laser mode (M3/M4). One undo step. */
   "document.update_layer": {
     params: UpdateLayerParams;
     result: Changed;

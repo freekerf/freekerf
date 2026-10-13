@@ -241,6 +241,9 @@ struct LayerFields {
     /// Filling lines per mm.
     #[serde(default)]
     lines_per_mm: Option<f64>,
+    /// Laser on command: `machine` (the machine's), `constant` (`M3`) or `dynamic` (`M4`).
+    #[serde(default)]
+    laser_mode: Option<freekerf_document::LaserMode>,
 }
 
 impl LayerFields {
@@ -265,6 +268,9 @@ impl LayerFields {
         }
         if let Some(v) = self.visible {
             l.visible = v;
+        }
+        if let Some(v) = self.laser_mode {
+            l.laser_mode = v;
         }
         if let Some(v) = self.fill_pattern {
             l.fill.pattern = v;
@@ -1220,7 +1226,7 @@ pub fn register_session_actions<C: SessionHost>(r: &mut Registry<C>) -> Result<(
     )?;
     r.register(
         "document.update_layer",
-        "Changes a layer's name, mode, speed, power, passes, visibility or filling. One undo step.",
+        "Changes a layer's name, mode, speed, power, passes, visibility, filling or laser mode (M3/M4). One undo step.",
         Tier::Edit,
         |c: &C, p: UpdateLayerParams| {
             let changed = lock(c).edit("layer settings", |d, _| {
@@ -2814,6 +2820,21 @@ mod tests {
             d("document.update_layer", json!({"id": lid, "speed_mm_min": 300})).unwrap(),
             json!({"changed": false})
         );
+        // M3 / M4 per layer
+        d(
+            "document.update_layer",
+            json!({"id": lid, "laser_mode": "dynamic"}),
+        )
+        .unwrap();
+        let layer = d("session.snapshot", Value::Null).unwrap()["document"]["layers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|l| l["id"] == lid)
+            .cloned()
+            .unwrap();
+        assert_eq!(layer["laser_mode"], "dynamic");
+        assert!(d("document.update_layer", json!({"id": lid, "laser_mode": "m5"})).is_err());
         assert!(d("document.update_layer", json!({"id": 77})).is_err());
         assert!(d("document.update_layer", json!({"id": lid, "lines_per_mm": -1.0})).is_err());
         assert!(

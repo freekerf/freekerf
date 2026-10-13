@@ -103,6 +103,11 @@ All notable changes to FreeKerf are documented here. The format follows
 - Layers panel: the hatch pattern (12 patterns) and the lines per mm of fill
   layers (fill density, with the spacing between hatch lines in its tooltip).
 
+- Laser mode per layer: `M3` constant or `M4` dynamic power (Grbl laser mode),
+  or the machine's command (default). The planner writes each layer's command
+  when the layer begins (images included); the layers panel has an M3 / M4
+  choice. Project files are version 3 (version 2 files read unchanged).
+
 ### Fixed
 
 - Design mode: a layer set to fill showed only the outlines on the canvas, as if

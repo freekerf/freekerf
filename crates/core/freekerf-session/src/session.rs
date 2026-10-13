@@ -135,6 +135,9 @@ pub struct LayerSummary {
     pub visible: bool,
     /// Hatch filling (fill modes).
     pub fill: freekerf_document::FillSettings,
+    /// Laser on command: `machine` (the machine's, `M3`), `constant` (`M3`) or
+    /// `dynamic` (`M4`).
+    pub laser_mode: freekerf_document::LaserMode,
     /// Objects on it.
     pub objects: usize,
 }
@@ -207,6 +210,7 @@ pub fn summary(doc: &Document) -> DocumentSummary {
                 passes: l.passes,
                 visible: l.visible,
                 fill: l.fill,
+                laser_mode: l.laser_mode,
                 objects: doc.objects_on(l.id).count(),
             })
             .collect(),

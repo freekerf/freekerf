@@ -190,7 +190,17 @@ pub fn plan_with(
     };
     for o in &doc.objects {
         if let ObjectKind::Image(img) = &o.kind {
-            lines.extend(image::plan_image_object(img, &options.machine, tracer)?);
+            // the layer's laser mode wins over the image's own command
+            let mode = doc.layer(o.layer).and_then(|l| l.laser_mode.command());
+            let lines_of = match mode {
+                Some(cmd) if cmd != img.settings.laser_on => {
+                    let mut img = img.clone();
+                    cmd.clone_into(&mut img.settings.laser_on);
+                    image::plan_image_object(&img, &options.machine, tracer)?
+                }
+                _ => image::plan_image_object(img, &options.machine, tracer)?,
+            };
+            lines.extend(lines_of);
         }
     }
     Ok(Job { lines })

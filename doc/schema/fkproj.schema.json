@@ -639,6 +639,26 @@
         }
       ]
     },
+    "LaserMode": {
+      "description": "How the laser is switched on for a layer's moves.",
+      "oneOf": [
+        {
+          "description": "The machine's laser on command (the planner's `laser_on`, `M3` by default).",
+          "type": "string",
+          "const": "machine"
+        },
+        {
+          "description": "`M3`: constant power, also while the head accelerates and in corners.",
+          "type": "string",
+          "const": "constant"
+        },
+        {
+          "description": "`M4`: dynamic power, scaled with the actual speed by Grbl in laser mode\n(`$32=1`), so corners and accelerations do not burn darker.",
+          "type": "string",
+          "const": "dynamic"
+        }
+      ]
+    },
     "Layer": {
       "description": "A colour layer: the objects of one colour and how to engrave or cut them.",
       "type": "object",
@@ -658,6 +678,10 @@
         "id": {
           "description": "Identifier.",
           "$ref": "#/$defs/LayerId"
+        },
+        "laser_mode": {
+          "description": "Laser on command (`M3` constant or `M4` dynamic power); by default the\nmachine's.",
+          "$ref": "#/$defs/LaserMode"
         },
         "mode": {
           "description": "Processing mode.",

@@ -47,7 +47,7 @@ Every action can be dispatched by name with JSON parameters (`host --stdio`, lat
 | `document.to_fkproj` | read | The document as `.fkproj` text. |
 | `document.transform` | edit | Moves, scales, mirrors or rotates objects (default: the selection): `{translate}`, `{scale, pivot}`, `{rotate_deg, pivot}` or `{matrix}`. Images only move and scale. One undo step. |
 | `document.translate` | edit | Moves objects (default: the selection) by `dx`, `dy` mm. One undo step. |
-| `document.update_layer` | edit | Changes a layer's name, mode, speed, power, passes, visibility or filling. One undo step. |
+| `document.update_layer` | edit | Changes a layer's name, mode, speed, power, passes, visibility, filling or laser mode (M3/M4). One undo step. |
 | `fire.cancel` | safety | Cancels the pending laser request (the one given, or any). Always allowed. |
 | `fire.request` | machine | Asks to run a laser action: it opens the fire confirmation (checklist and countdown) and runs only when a person confirms on screen. Returns the pending request. |
 | `history.redo` | edit | Redoes the last undone change. |
@@ -138,6 +138,7 @@ Adds a layer of a colour (line, 1000 mm/min, power 1000, 1 pass unless given). O
 | --- | --- | --- |
 | `color` | yes | Colour, `#RRGGBB`. |
 | `fill_pattern` | no | Filling pattern. |
+| `laser_mode` | no | Laser on command: `machine` (the machine's), `constant` (`M3`) or `dynamic` (`M4`). |
 | `lines_per_mm` | no | Filling lines per mm. |
 | `mode` | no | `line`, `fill`, `fill_and_line`, `cut` or `ignore`. |
 | `name` | no | Name. |
@@ -467,12 +468,13 @@ Moves objects (default: the selection) by `dx`, `dy` mm. One undo step.
 
 ### `document.update_layer`
 
-Changes a layer's name, mode, speed, power, passes, visibility or filling. One undo step.
+Changes a layer's name, mode, speed, power, passes, visibility, filling or laser mode (M3/M4). One undo step.
 
 | Parameter | Required | Description |
 | --- | --- | --- |
 | `fill_pattern` | no | Filling pattern. |
 | `id` | yes | Layer id. |
+| `laser_mode` | no | Laser on command: `machine` (the machine's), `constant` (`M3`) or `dynamic` (`M4`). |
 | `lines_per_mm` | no | Filling lines per mm. |
 | `mode` | no | `line`, `fill`, `fill_and_line`, `cut` or `ignore`. |
 | `name` | no | Name. |

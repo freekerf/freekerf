@@ -112,6 +112,19 @@ impl Writer {
         }
     }
 
+    /// Switches the laser on command (`M3`/`M4`) for the following moves (a layer's
+    /// laser mode). With PWM the laser stays on between moves, so the new command is
+    /// written now when `write`; without PWM pen down writes it.
+    pub fn set_laser_on(&mut self, cmd: &str, write: bool) {
+        if cmd == self.cmd_on {
+            return;
+        }
+        cmd.clone_into(&mut self.cmd_on);
+        if write && self.support_pwm {
+            self.out.push(cmd.to_owned());
+        }
+    }
+
     /// `PutInitialCommand`: laser on at zero power (PWM) or off with the power set.
     pub fn initial(&mut self) {
         if self.support_pwm {

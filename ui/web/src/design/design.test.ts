@@ -130,6 +130,14 @@ describe('Design mode', () => {
     power.value = '75';
     await fireEvent.change(power);
     await waitFor(async () => expect((await summary()).layers[0]!.power).toBe(750));
+    // M3 / M4: a layer following the machine shows M3
+    const laser = within(rows[0]!).getByTestId('layer-laser');
+    expect(within(laser).getByRole('radio', { name: 'M3 constant' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
+    await fireEvent.click(within(laser).getByRole('radio', { name: 'M4 dynamic' }));
+    await waitFor(async () => expect((await summary()).layers[0]!.laser_mode).toBe('dynamic'));
+    await waitFor(() => expect(rows[0]!.querySelector('.layer-params')!.textContent).toContain('M4'));
     await fireEvent.click(within(rows[0]!).getByLabelText('Move down in the output order'));
     await waitFor(async () => expect((await summary()).layers[1]!.color).toBe('#4C8DFF'));
   });

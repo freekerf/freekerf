@@ -85,6 +85,10 @@ layers-pattern-squares = Rauten
 layers-pattern-zig_zag = Zickzack
 layers-pattern-hilbert = Hilbert-Kurve
 layers-pattern-inset = Konzentrisch (Versatz)
+layers-laser = Laser
+layers-laser-constant = M3 konstant
+layers-laser-dynamic = M4 dynamisch
+layers-laser-hint = M3: überall dieselbe Leistung (Schneiden). M4: die Leistung folgt der Geschwindigkeit im Grbl-Lasermodus ($32=1), Ecken und Beschleunigungen brennen nicht dunkler (Gravur, Füllungen).
 layers-interval = Zeilenabstand
 layers-air = Luftunterstützung
 layers-material = Material aus der Bibliothek übernehmen…

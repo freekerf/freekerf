@@ -161,6 +161,36 @@ impl Default for FillSettings {
 #[serde(transparent)]
 pub struct LayerId(pub u32);
 
+/// How the laser is switched on for a layer's moves.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LaserMode {
+    /// The machine's laser on command (the planner's `laser_on`, `M3` by default).
+    #[default]
+    Machine,
+    /// `M3`: constant power, also while the head accelerates and in corners.
+    Constant,
+    /// `M4`: dynamic power, scaled with the actual speed by Grbl in laser mode
+    /// (`$32=1`), so corners and accelerations do not burn darker.
+    Dynamic,
+}
+
+impl LaserMode {
+    /// The laser on command of this mode; `None` for [`LaserMode::Machine`].
+    #[must_use]
+    pub const fn command(self) -> Option<&'static str> {
+        match self {
+            Self::Machine => None,
+            Self::Constant => Some("M3"),
+            Self::Dynamic => Some("M4"),
+        }
+    }
+
+    const fn is_machine(&self) -> bool {
+        matches!(self, Self::Machine)
+    }
+}
+
 /// A colour layer: the objects of one colour and how to engrave or cut them.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Layer {
@@ -187,6 +217,10 @@ pub struct Layer {
     /// Shown in the editor (hidden layers are still planned unless `ignore`).
     #[serde(default = "yes")]
     pub visible: bool,
+    /// Laser on command (`M3` constant or `M4` dynamic power); by default the
+    /// machine's.
+    #[serde(default, skip_serializing_if = "LaserMode::is_machine")]
+    pub laser_mode: LaserMode,
 }
 
 const fn one() -> u32 {
@@ -211,6 +245,7 @@ impl Layer {
             passes: 1,
             fill: FillSettings::default(),
             visible: true,
+            laser_mode: LaserMode::Machine,
         }
     }
 

@@ -9,7 +9,7 @@ actions, and the planner turns it into G-code. The model is
 
 | Part | What |
 | --- | --- |
-| `Layer` | a colour (`#RRGGBB`), a name, a **mode** (`line`, `fill`, `fill_and_line`, `cut`, `ignore`), `speed_mm_min`, `power` (the `S` value), `passes`, the hatch `fill` (pattern and lines per mm), `visible` |
+| `Layer` | a colour (`#RRGGBB`), a name, a **mode** (`line`, `fill`, `fill_and_line`, `cut`, `ignore`), `speed_mm_min`, `power` (the `S` value), `passes`, the hatch `fill` (pattern and lines per mm), `visible`, the `laser_mode` (`machine`: the machine's laser on command, `constant`: `M3`, `dynamic`: `M4`; left out when `machine`) |
 | `Object` | an id (never reused), the layer it is on, a name, its source (file format and name), its kind, the `transform` applied since it was made (affine; the geometry already includes it, so planners ignore it: the editor reads the rotation from it) and, for text, its `text` |
 | `text` | on a `shape` made by the editor's text tool: the text and the font height. The strokes (single-stroke Hershey font) are written at the origin and moved by the object's `transform`, so editing the text keeps its position, rotation and scale |
 | `shape` | vector paths in millimetres, Y up: lines, circular arcs (centre and direction, so they become `G2`/`G3`) and cubic Béziers (`freekerf-geometry`) |
@@ -24,7 +24,7 @@ inside each group; `ignore` layers are skipped. This is LaserGRBL's colour-layer
 
 - JSON, UTF-8, pretty-printed with a stable field order; binary data (images) is
   base64.
-- `"format": "freekerf-project"` and `"version": 2`. Older versions are migrated
+- `"format": "freekerf-project"` and `"version": 3`. Older versions are migrated
   when read; a newer version is refused with a clear error (written by a newer
   FreeKerf).
 
@@ -32,6 +32,7 @@ inside each group; `ignore` layers are skipped. This is LaserGRBL's colour-layer
   | --- | --- |
   | 1 | first version |
   | 2 | objects may carry `transform` and `text` (both optional, left out when unused: a version 1 file reads unchanged) |
+  | 3 | layers may carry `laser_mode` (left out when `machine`: a version 2 file reads unchanged; the version keeps an older FreeKerf from planning an `M4` layer with `M3`) |
 - Reading checks the invariants: unique layer and object ids, every object on an
   existing layer, at least one pass per layer.
 - Numbers round-trip exactly (shortest representation that reads back to the same
@@ -69,7 +70,7 @@ are in `freekerf-session` ([session.md](session.md), [actions.md](actions.md)).
 ## Tests
 
 - Unit tests in `crates/core/freekerf-document/src` (layers, objects, ids,
-  execution order, version and invariant checks, the version 1 → 2 migration,
+  execution order, version and invariant checks, the version 1 → 2 and 2 → 3 migrations,
   transforms and shapes, schema).
 - `tests/properties.rs`: any generated document survives `to_fkproj` →
   `from_fkproj` unchanged.

@@ -176,6 +176,7 @@ function newLayer(id: number, color: Color): Layer {
     passes: 1,
     fill: { pattern: 'horizontal', lines_per_mm: 10 },
     visible: true,
+    laser_mode: 'machine',
   };
 }
 
@@ -695,6 +696,7 @@ export class FakeDocument {
         if (p.visible != null) l.visible = p.visible;
         if (p.fill_pattern != null) l.fill.pattern = p.fill_pattern;
         if (p.lines_per_mm != null) l.fill.lines_per_mm = p.lines_per_mm;
+        if (p.laser_mode != null) l.laser_mode = p.laser_mode;
         return JSON.stringify(l) !== before;
       });
       return { changed };

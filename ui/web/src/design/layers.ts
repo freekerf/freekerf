@@ -38,7 +38,9 @@ export function modeLabel(m: LayerMode): string {
 /** One line of layer parameters: `1000 mm/min · 50% · 1×`. */
 export function layerParams(l: Layer, maxPower = 1000): string {
   const pct = Math.round((100 * l.power) / maxPower);
-  return `${l.speed_mm_min} mm/min · ${pct}% · ${l.passes}×`;
+  // the laser command only when it is not the machine's default (M3)
+  const m4 = l.laser_mode === 'dynamic' ? ' · M4' : '';
+  return `${l.speed_mm_min} mm/min · ${pct}% · ${l.passes}×${m4}`;
 }
 
 /** The palette action. */

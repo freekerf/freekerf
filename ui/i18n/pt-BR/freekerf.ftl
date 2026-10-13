@@ -85,6 +85,10 @@ layers-pattern-squares = Losangos
 layers-pattern-zig_zag = Zigue-zague
 layers-pattern-hilbert = Curva de Hilbert
 layers-pattern-inset = Concêntrico (contornos)
+layers-laser = Laser
+layers-laser-constant = M3 constante
+layers-laser-dynamic = M4 dinâmico
+layers-laser-hint = M3: a mesma potência em todo o trajeto (corte). M4: a potência acompanha a velocidade no modo laser do Grbl ($32=1), e cantos e acelerações não queimam mais escuro (gravação, preenchimentos).
 layers-interval = Intervalo de linhas
 layers-air = Assistência de ar
 layers-material = Aplicar material da biblioteca…
