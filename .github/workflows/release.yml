@@ -1,25 +1,25 @@
 name: release
 
 # Installers of the desktop app (PLAN.md M5): Windows (MSI, NSIS), Linux (.deb,
-# AppImage), Flatpak and macOS (universal disk image). A tag `v<version>` builds them,
-# smoke-tests each one and attaches them to a draft GitHub release; a manual run
-# or a pull request touching the packaging only builds and tests them (artifacts).
+# AppImage), Flatpak and macOS (universal disk image), built and smoke-tested on
+# the release train (ADR 0018): a pull request to stable builds and tests them
+# (artifacts); a push to stable does the same and, when its version has no tag
+# yet, tags it `v<version>` and attaches them to a draft GitHub release. A manual
+# run builds and tests them on any branch (artifacts).
 on:
-  push:
-    tags: ["v*"]
-  workflow_dispatch:
   pull_request:
-    paths:
-      - .github/workflows/release.yml
-      - .github/scripts/smoke-windows-installer.ps1
-      - .github/scripts/smoke-linux-installer.sh
-      - .github/scripts/smoke-macos-installer.sh
-      - apps/desktop/src-tauri/tauri.conf.json
-      - apps/desktop/src-tauri/icons/**
-      - packaging/**
+    branches: [stable]
+  push:
+    branches: [stable]
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+# a new push to a pull request cancels its previous run; runs on stable queue
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -29,16 +29,44 @@ env:
   TAURI_CLI: "2.12.3"
 
 jobs:
+  version:
+    # one version everywhere, before an hour of builds: Cargo.toml, tauri.conf.json
+    # and a <release> in the metainfo; and whether it is already tagged
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tagged: ${{ steps.tag.outputs.tagged }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cargo.toml, tauri.conf.json and the metainfo agree
+        id: version
+        run: |
+          version=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
+          cargo=$(python3 -I -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')
+          test "$version" = "$cargo" || { echo "tauri.conf.json $version, Cargo.toml $cargo"; exit 1; }
+          # the MSI needs a numeric version: 1.2.3 or 1.2.3-4
+          echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$' \
+            || { echo "$version is not numeric (the MSI build would fail)"; exit 1; }
+          grep -qF "<release version=\"$version\"" packaging/linux/io.github.freekerf.FreeKerf.metainfo.xml \
+            || { echo "no <release version=\"$version\"> in the metainfo"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: is v<version> already tagged
+        id: tag
+        run: |
+          version=${{ steps.version.outputs.version }}
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "tagged=true" >> "$GITHUB_OUTPUT"
+            echo "v$version is already tagged: no release from this run" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "tagged=false" >> "$GITHUB_OUTPUT"
+            echo "v$version is not tagged: a push to stable tags it and drafts the release" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   windows:
+    needs: [version]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: the tag matches the app version (tauri.conf.json)
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: pwsh
-        run: |
-          $version = (Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
-          if ("v$version" -ne $env:GITHUB_REF_NAME) { throw "tag $env:GITHUB_REF_NAME, app version $version" }
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
@@ -84,17 +112,13 @@ jobs:
 
   linux:
     # the oldest supported Ubuntu: the .deb and the AppImage need its glibc or newer
+    needs: [version]
     runs-on: ubuntu-22.04
     env:
       # linuxdeploy (AppImage) is itself an AppImage: no FUSE needed
       APPIMAGE_EXTRACT_AND_RUN: "1"
     steps:
       - uses: actions/checkout@v4
-      - name: the tag matches the app version (tauri.conf.json)
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          version=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
-          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, app version $version"; exit 1; }
       - name: metainfo and desktop entry are valid (AppStream 1.x of Ubuntu 24.04)
         run: |
           docker run --rm -v "$PWD/packaging/linux:/p:ro" ubuntu:24.04 bash -euc '
@@ -159,16 +183,12 @@ jobs:
   macos:
     # Apple Silicon runner; one universal disk image (arm64 + x86_64), signed ad hoc
     # (no Developer ID yet: not notarized, see the roadmap)
+    needs: [version]
     runs-on: macos-latest
     env:
       TARGETS: aarch64-apple-darwin x86_64-apple-darwin
     steps:
       - uses: actions/checkout@v4
-      - name: the tag matches the app version (tauri.conf.json)
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          version=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
-          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, app version $version"; exit 1; }
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
@@ -221,6 +241,7 @@ jobs:
   flatpak:
     # the build only: the container is the freedesktop SDK image (no package
     # manager, no Xvfb); flatpak-test installs and runs the bundle
+    needs: [version]
     runs-on: ubuntu-latest
     container:
       # keep the tag in step with runtime-version in the manifest
@@ -271,21 +292,32 @@ jobs:
           if-no-files-found: error
 
   publish:
-    # a draft: a maintainer writes the notes from CHANGELOG.md and publishes it
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [windows, linux, macos, flatpak-test]
+    # a push to stable with a new version: the tag, then a draft release; a
+    # maintainer writes the notes from CHANGELOG.md and publishes it
+    if: github.event_name == 'push' && github.ref == 'refs/heads/stable' && needs.version.outputs.tagged == 'false'
+    needs: [version, windows, linux, macos, flatpak-test]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      TAG: v${{ needs.version.outputs.version }}
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dist
           pattern: freekerf-*
           merge-multiple: true
+      # pushed here, not by the draft: a draft release creates its tag only when it
+      # is published, and the next push to stable must see this version as released
+      # (a tag pushed with GITHUB_TOKEN starts no other workflow)
+      - name: tag the commit that was built
+        run: |
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
       - name: draft release with the installers
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft \
-            --title "FreeKerf ${GITHUB_REF_NAME#v}" --generate-notes dist/*
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
+            --title "FreeKerf ${TAG#v}" --generate-notes dist/*

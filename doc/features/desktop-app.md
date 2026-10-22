@@ -71,7 +71,9 @@ Tokens (`ui/tokens/fk-tokens.css`), UI icons, fonts and app icons come from
 
 Linux (WebKitGTK 4.1) is the first target and runs the CI smoke test (the app
 starts on Xvfb and stays up). Windows (WebView2) and macOS (WKWebView) compile in
-CI on native runners (`native-check`, which checks the whole workspace).
+CI on native runners (`native-check`, which checks the whole workspace). Both jobs
+are in `.github/workflows/native.yml`, which runs every night on `main`, on pull
+requests to `stable` and by hand, not on pull requests to `main`.
 
 ## Releases
 
@@ -92,20 +94,36 @@ The WebView2 runtime (Windows) is installed by the installers when it is missing
 (bootstrapper, needs the internet); WebKitGTK comes from the distribution (`.deb`
 dependencies), the AppImage or the GNOME runtime (Flatpak).
 
-- A tag `v<version>` (the version of `tauri.conf.json`, checked) builds, tests and
-  attaches the installers and `SHA256SUMS-{windows,linux,macos,flatpak}.txt` to a
-  **draft** GitHub release; a maintainer writes the notes and publishes it.
-- A manual run (*Run workflow*) or a pull request that touches the workflow, a smoke
-  script, `tauri.conf.json`, the icons or `packaging/` builds and tests them; the
-  installers are the run's `freekerf-windows`, `freekerf-linux`, `freekerf-macos`
-  and `freekerf-flatpak` artifacts.
+Releases come from the `stable` branch, a release train fed from `main`
+([ADR 0018](../adr/0018-release-train.md)):
 
-To release: bump `version` in `Cargo.toml` (`[workspace.package]`) and
-`apps/desktop/src-tauri/tauri.conf.json`, add a `<release>` to
-`packaging/linux/io.github.freekerf.FreeKerf.metainfo.xml`, merge, then
-`git tag v<version>` on `main` and push the tag. The MSI needs a numeric version
-(`1.2.3`, or a numeric pre-release such as `1.2.3-1`); a tag such as `v1.2.3-beta`
-fails the MSI build.
+- A pull request to `stable` builds and tests the installers (and runs
+  `native.yml`); they are the run's `freekerf-windows`, `freekerf-linux`,
+  `freekerf-macos` and `freekerf-flatpak` artifacts. Its first job, `version`,
+  checks that `Cargo.toml`, `tauri.conf.json` and the metainfo name the same
+  numeric version.
+- A push to `stable` (the merge) builds and tests them again. When `v<version>` is
+  not tagged yet, `publish` tags the commit that was built and attaches the
+  installers and `SHA256SUMS-{windows,linux,macos,flatpak}.txt` to a **draft**
+  GitHub release; a maintainer writes the notes and publishes it. A push whose
+  version is already tagged only leaves the artifacts.
+- A manual run (*Run workflow*) builds and tests them on any branch (artifacts
+  only): the way to try a packaging change before it reaches `stable`.
+
+To release:
+
+1. On `main` (or in the release pull request): bump `version` in `Cargo.toml`
+   (`[workspace.package]`) and `apps/desktop/src-tauri/tauri.conf.json`, add a
+   `<release>` to `packaging/linux/io.github.freekerf.FreeKerf.metainfo.xml` and
+   move the `[Unreleased]` notes of `CHANGELOG.md` under the version.
+2. Open a pull request from `main` to `stable` and merge it with a **merge commit**
+   (never squash: `stable` must keep `main`'s history, or the next train conflicts).
+3. Review and publish the draft release.
+
+The MSI needs a numeric version (`1.2.3`, or a numeric pre-release such as
+`1.2.3-1`); `version` refuses `1.2.3-beta`. A fix goes to `main` first and reaches
+`stable` with the next train; when `main` cannot be released, a pull request to
+`stable` carries the fix, and `stable` is then merged back into `main`.
 
 ### Linux packaging files
 

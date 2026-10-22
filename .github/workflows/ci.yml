@@ -1,5 +1,8 @@
 name: ci
 
+# The quick checks, on Linux: every pull request (to main and to stable) and main.
+# The native runners and the app end to end are in native.yml, the installers in
+# release.yml: both run on pull requests to stable (ADR 0018).
 on:
   push:
     branches: [main]
@@ -7,6 +10,11 @@ on:
 
 permissions:
   contents: read
+
+# a new push to a pull request cancels the run of the previous one
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -94,23 +102,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --target wasm32-unknown-unknown -p freekerf-gcode -p freekerf-protocol -p freekerf-emulator -p freekerf-session -p freekerf-geometry -p freekerf-document -p freekerf-planner -p freekerf-import -p freekerf-raster
 
-  native-check:
-    # native runners: QuickJS (rquickjs) is C and needs the platform's compiler
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo check --workspace --all-targets  # the desktop app too (WebView2, WKWebView)
-      # the local endpoint: Unix sockets on macOS, named pipes on Windows
-      - run: cargo test -p freekerf-ipc
-
   msrv:
     runs-on: ubuntu-latest
     steps:
@@ -158,48 +149,6 @@ jobs:
         with:
           name: ui-coverage
           path: ui/web/coverage/
-
-  desktop:
-    # the Tauri app: clippy, tests, build with the embedded front end, a smoke run
-    # on a virtual display and the end-to-end tests (emulator, never a serial port)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-      - uses: ./.github/actions/tauri-deps
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE }}
-          cache: npm
-          cache-dependency-path: ui/web/package-lock.json
-      - run: npm ci && npm run build
-        working-directory: ui/web
-      - run: cargo clippy -p freekerf-desktop --all-targets --features custom-protocol -- -D warnings
-      - run: cargo test -p freekerf-desktop
-      - run: cargo build -p freekerf-desktop --features custom-protocol
-      - name: the app starts and stays up on X11 (Xvfb)
-        run: |
-          export FREEKERF_HOME="$(mktemp -d)"
-          # the app's own exit code (xvfb-run may fail its own cleanup and replace it)
-          xvfb-run -a sh -c 'timeout 15 target/debug/freekerf-desktop; echo $? > "$FREEKERF_HOME/exit-code"' || true
-          code="$(cat "$FREEKERF_HOME/exit-code")"
-          test "$code" -eq 124 || { echo "the app exited with $code (124 = still running after 15 s)"; exit 1; }
-      - name: the canvas benchmark runs (small scene; CI has no GPU, so the fps is not checked)
-        run: |
-          export FREEKERF_HOME="$(mktemp -d)"
-          xvfb-run -a timeout 120 target/debug/freekerf-desktop --bench-canvas=bench.json \
-            --bench-query="paths=500&image=512x384&ms=1000" || true
-          jq -e '.phases | length == 2' bench.json
-          cat bench.json
-      - name: end-to-end tests of the app on the emulator (WebdriverIO + tauri-driver)
-        run: |
-          cargo install tauri-driver --version 2.1.0 --locked
-          cd ui/web
-          xvfb-run -a npm run test:e2e
 
   conformance:
     # conformance's protocol and golden (G-code) layers against the Rust build
