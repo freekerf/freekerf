@@ -21,12 +21,13 @@
 
 pub mod fill;
 pub mod generators;
-pub mod hershey;
-mod hershey_table;
 pub mod image;
 pub mod origin;
 pub mod vector;
 pub mod writer;
+
+/// The Hershey text of the test generators (it lives in `freekerf-text`).
+pub use freekerf_text::hershey;
 
 use freekerf_document::{Document, ObjectKind};
 use freekerf_gcode::{AnalysisOptions, Program};

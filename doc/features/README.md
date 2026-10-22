@@ -39,5 +39,6 @@ tests and divergences from LaserGRBL. The action catalogue is generated.
 | [i18n.md](i18n.md) | Fluent translations, language setting, LaserGRBL translations (`resx2ftl`) | M4a |
 | [theming.md](theming.md) | themes, high contrast, density, units | M4a |
 | [design-mode.md](design-mode.md) | Design mode on the document: layers, palette, inspector, tools, handles, import, welcome | M4a, M4b |
+| [text.md](text.md) | text objects: fonts (single-line and installed), style, alignment, effects, text on a path, SVG text | M5 |
 | [canvas.md](canvas.md) | the canvas: renderer, gestures, G-code preview, head, performance | M4a |
 | [desktop-app.md](desktop-app.md) | the Tauri app, its boundary with the service, generated types, design system | M4a |

@@ -225,6 +225,73 @@ describe('Design mode', () => {
     await waitFor(async () => expect((await summary()).objects[0]!.text!.text).toBe('Hello'));
   });
 
+  it('text inspector: font with a sample, style, alignment, spacing, effects, path', async () => {
+    const { service, doc, summary } = await mountDesign();
+    await service.dispatch('view.open_panel', { name: 'object' });
+    await doc.dispatch('document.add_text', { text: 'Olá', x: 0, y: 0 });
+    const spec = async () => (await summary()).objects.find((o) => o.kind === 'text')!.text!;
+    // the fonts: single-line first, then the installed ones; a sample of the current one
+    const font = (await screen.findByTestId('text-font')) as HTMLSelectElement;
+    await waitFor(() => expect(font.querySelectorAll('optgroup')).toHaveLength(2));
+    expect(font.value).toBe('Relief SingleLine');
+    expect(screen.getByTestId('text-sample').getAttribute('class')).toContain('stroke');
+    // an outline font: weld and stencil become available
+    expect((screen.getByTestId('text-weld') as HTMLInputElement).disabled).toBe(true);
+    font.value = 'DejaVu Sans';
+    await fireEvent.change(font);
+    await waitFor(async () => expect((await spec()).font).toBe('DejaVu Sans'));
+    await waitFor(() => expect((screen.getByTestId('text-weld') as HTMLInputElement).disabled).toBe(false));
+    await fireEvent.click(screen.getByTestId('text-weld'));
+    await waitFor(async () => expect((await spec()).weld).toBe(true));
+    // style and alignment toggles
+    await fireEvent.click(screen.getByTestId('text-bold'));
+    await waitFor(() => expect(screen.getByTestId('text-bold').getAttribute('aria-pressed')).toBe('true'));
+    await fireEvent.click(screen.getByTestId('text-underline'));
+    await fireEvent.click(screen.getByTestId('text-align-center'));
+    await waitFor(async () => {
+      const s = await spec();
+      expect([s.bold, s.underline, s.align]).toEqual([true, true, 'center']);
+    });
+    await fireEvent.click(screen.getByTestId('text-bold'));
+    await waitFor(async () => expect((await spec()).bold).toBeUndefined());
+    // spacing: width in percent
+    const width = screen.getByTestId('text-width') as HTMLInputElement;
+    expect(Number(width.value)).toBe(100);
+    width.value = '80';
+    await fireEvent.change(width);
+    await waitFor(async () => expect((await spec()).width_scale).toBeCloseTo(0.8));
+    const outline = screen.getByTestId('text-outline') as HTMLInputElement;
+    outline.value = '1';
+    await fireEvent.change(outline);
+    await waitFor(async () => expect((await spec()).outline_mm).toBe(1));
+    outline.value = '0';
+    await fireEvent.change(outline);
+    await waitFor(async () => expect((await spec()).outline_mm).toBeUndefined());
+
+    // a text and a shape: put the text on the shape's path, adjust it, take it off
+    const { id: line } = await doc.dispatch('document.add_shape', {
+      shape: 'rect',
+      x: 0,
+      y: 30,
+      width: 80,
+      height: 1,
+    });
+    const text = (await summary()).objects.find((o) => o.kind === 'text')!.id;
+    await doc.dispatch('document.select', { ids: [text, line], mode: 'replace' });
+    await fireEvent.click(await screen.findByTestId('text-on-path'));
+    await waitFor(async () => expect((await spec()).path?.object).toBe(line));
+    await doc.dispatch('document.select', { ids: [text], mode: 'replace' });
+    await screen.findByTestId('text-path');
+    expect(screen.queryByTestId('text-arc')).toBeNull();
+    await fireEvent.click(screen.getByTestId('text-path-flip'));
+    await waitFor(async () => expect((await spec()).path?.flip).toBe(true));
+    await fireEvent.click(screen.getByTestId('text-off-path'));
+    await waitFor(async () => expect((await spec()).path).toBeUndefined());
+    // convert to paths: a plain shape
+    await fireEvent.click(await screen.findByTestId('text-to-paths'));
+    await waitFor(async () => expect((await summary()).objects.every((o) => o.kind === 'shape')).toBe(true));
+  });
+
   it('combine, offset and array from the inspector and the rail', async () => {
     const { service, summary } = await mountDesign();
     await service.dispatch('view.open_panel', { name: 'object' });

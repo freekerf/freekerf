@@ -80,6 +80,8 @@ pub fn replay_svg(
         scale_to_mm: Some(max_size),
         user_offset: offset,
         legacy_bezier: !smart_bezier,
+        // vectorized images have no text
+        fonts: None,
     };
     let import = svg::import(svg_bytes, &opts).map_err(|e| PlanError::Image(e.to_string()))?;
     let doc = import.into_single_layer(Some(&Source {

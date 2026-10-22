@@ -20,7 +20,7 @@ function mount() {
   const onsubmit = vi.fn();
   const oncancel = vi.fn();
   render(TextEditor, { object, camera, onsubmit, oncancel });
-  return { onsubmit, oncancel, input: screen.getByTestId<HTMLInputElement>('text-editor') };
+  return { onsubmit, oncancel, input: screen.getByTestId<HTMLTextAreaElement>('text-editor') };
 }
 
 describe('text editor on the canvas', () => {
@@ -59,5 +59,16 @@ describe('text editor on the canvas', () => {
     await fireEvent.input(m.input, { target: { value: 'Bye' } });
     await fireEvent.blur(m.input);
     expect(m.onsubmit).toHaveBeenCalledWith('Bye');
+  });
+
+  it('Shift+Enter starts a new line instead of applying', async () => {
+    const m = mount();
+    const shifted = await fireEvent.keyDown(m.input, { key: 'Enter', shiftKey: true });
+    // not prevented: the browser inserts the line break
+    expect(shifted).toBe(true);
+    expect(m.onsubmit).not.toHaveBeenCalled();
+    await fireEvent.input(m.input, { target: { value: 'Hel\nlo' } });
+    await fireEvent.keyDown(m.input, { key: 'Enter' });
+    expect(m.onsubmit).toHaveBeenCalledWith('Hel\nlo');
   });
 });

@@ -49,15 +49,44 @@ export type AddShapeParams = {
 };
 
 export type AddTextParams = {
-  /** Height of the font, mm (default 10). */
+  /** Alignment of the lines. */
+  align?: TextAlign | null;
+  /**
+   * Bend the text on a circle of this radius, mm (negative: along its
+   * bottom; 0: straight). Not for a text on a path.
+   */
+  arc_radius_mm?: number | null;
+  /** Bold. */
+  bold?: boolean | null;
+  /** Font family (`fonts.list`; default for a new text: Relief SingleLine). */
+  font?: string | null;
+  /** Height of the capitals, mm (default 10). */
   height_mm?: number | null;
+  /** Italic. */
+  italic?: boolean | null;
   /** Layer id (default: the current layer; a black layer when there is none). */
   layer?: number | null;
-  /** The text (printable ASCII is drawn; other characters are skipped). */
+  /** Space added between letters, mm (default 0). */
+  letter_spacing_mm?: number | null;
+  /** Distance between baselines, times the font's line height (default 1). */
+  line_spacing?: number | null;
+  /** Add an outline this far around the letters, mm (negative: inside; 0: none). */
+  outline_mm?: number | null;
+  /** Outline fonts: stencil bridges this wide, mm (0: none). */
+  stencil_mm?: number | null;
+  /** Struck through. */
+  strikethrough?: boolean | null;
+  /** The text; `\n` starts a new line. */
   text: string;
-  /** Left of the first letter, mm. */
+  /** Underlined. */
+  underline?: boolean | null;
+  /** Outline fonts: merge overlapping letters into one shape. */
+  weld?: boolean | null;
+  /** Horizontal scale of the letters (default 1). */
+  width_scale?: number | null;
+  /** Where the first baseline starts (left), is centred or ends (right), mm. */
   x: number;
-  /** Baseline, mm (Y up). */
+  /** Baseline of the first line, mm (Y up). */
   y: number;
 };
 
@@ -479,6 +508,41 @@ export type FkprojText = {
 export type FocusParams = {
   /** Element with the focus (`canvas`, `console`...), none when absent. */
   target?: string | null;
+};
+
+/** A font family of `fonts.list`. */
+export type FontFamily = {
+  /** Has a bold face (else bold is drawn thicker). */
+  bold: boolean;
+  /** Built into FreeKerf. */
+  builtin: boolean;
+  /** Has an italic face (else italic is slanted). */
+  italic: boolean;
+  /** Family name (a text's `font`). */
+  name: string;
+  /** Single-line (open strokes, one pass per stroke). */
+  single_line: boolean;
+};
+
+/** A sample of a font (`fonts.preview`). */
+export type FontPreview = {
+  /** SVG path data of the sample 10 mm high, mm, Y down (for `<path d>`). */
+  d: string;
+  /** Single-line: draw with a stroke, not a fill. */
+  single_line: boolean;
+  /** `[x, y, width, height]` of the sample, mm, Y down (for `viewBox`). */
+  view_box: [number, number, number, number];
+};
+
+export type FontPreviewParams = {
+  /** Bold. */
+  bold?: boolean;
+  /** Font family. */
+  family: string;
+  /** Italic. */
+  italic?: boolean;
+  /** Sample text (default `AaBbÇç 123`). */
+  text?: string | null;
 };
 
 /** `job.frame`. */
@@ -1443,12 +1507,47 @@ export type SetRasterParams = {
 };
 
 export type SetTextParams = {
-  /** New height of the font, mm. */
+  /** Alignment of the lines. */
+  align?: TextAlign | null;
+  /**
+   * Bend the text on a circle of this radius, mm (negative: along its
+   * bottom; 0: straight). Not for a text on a path.
+   */
+  arc_radius_mm?: number | null;
+  /** Bold. */
+  bold?: boolean | null;
+  /** Font family (`fonts.list`; default for a new text: Relief SingleLine). */
+  font?: string | null;
+  /** New height of the capitals, mm. */
   height_mm?: number | null;
   /** Id of a text object. */
   id: number;
+  /** Italic. */
+  italic?: boolean | null;
+  /** Space added between letters, mm (default 0). */
+  letter_spacing_mm?: number | null;
+  /** Distance between baselines, times the font's line height (default 1). */
+  line_spacing?: number | null;
+  /** Add an outline this far around the letters, mm (negative: inside; 0: none). */
+  outline_mm?: number | null;
+  /** On a path: distance of the baseline from it, mm. */
+  path_distance_mm?: number | null;
+  /** On a path: follow it backwards (the other side). */
+  path_flip?: boolean | null;
+  /** On a path: where the text starts along it, mm. */
+  path_offset_mm?: number | null;
+  /** Outline fonts: stencil bridges this wide, mm (0: none). */
+  stencil_mm?: number | null;
+  /** Struck through. */
+  strikethrough?: boolean | null;
   /** New text. */
   text?: string | null;
+  /** Underlined. */
+  underline?: boolean | null;
+  /** Outline fonts: merge overlapping letters into one shape. */
+  weld?: boolean | null;
+  /** Horizontal scale of the letters (default 1). */
+  width_scale?: number | null;
 };
 
 /** `settings.get`. */
@@ -1549,16 +1648,97 @@ export type TestRange = {
   to: number;
 };
 
+/** How the lines of a text line up. */
+export type TextAlign = "left" | "center" | "right" | "justify";
+
+export type TextIdParams = {
+  /** Id of a text object. */
+  id: number;
+};
+
+export type TextOnPathParams = {
+  /** Distance of the baseline from the path, mm (default 0). */
+  distance_mm?: number | null;
+  /** Follow the path backwards (default false). */
+  flip?: boolean | null;
+  /** Id of a text object. */
+  id: number;
+  /** Where the text starts along the path, mm (default 0). */
+  offset_mm?: number | null;
+  /**
+   * Id of the shape whose first path the text follows (it follows it when it
+   * changes).
+   */
+  path: number;
+};
+
+/** The baseline a text follows. */
+export type TextPath = {
+  /**
+   * Distance of the baseline from the path, mm (positive: to the left of the
+   * path's direction, where the letters stand).
+   */
+  distance_mm?: number;
+  /** Follow the path backwards (the text goes to its other side). */
+  flip?: boolean;
+  /**
+   * The object whose first path is the baseline: the text follows it when it
+   * changes. `None` once that object is gone (the text keeps the last copy).
+   */
+  object?: ObjectId | null;
+  /** Where the text starts along the path, mm (with the alignment). */
+  offset_mm?: number;
+  /** The baseline as it was at the last layout, mm (document coordinates). */
+  path: Path;
+};
+
 /**
- * The text an object was made from (editable: the editor writes the strokes again
- * when the text or its height change, at the origin, then applies the object's
- * `transform`). Single-stroke Hershey font of the test generators.
+ * The text an object was made from (editable: the editor lays it out again when
+ * the text, its font or its style change, at the origin, then applies the
+ * object's `transform`; a text on a linked path is laid out along that path).
  */
 export type TextSpec = {
-  /** Height of the font, mm. */
+  /** Alignment of the lines. */
+  align?: TextAlign;
+  /**
+   * The text is bent along a circle of this radius, mm, centred under it
+   * (negative: above it, the text reads along the bottom).
+   */
+  arc_radius_mm?: number | null;
+  /** Bold (the family's bold face, else drawn thicker). */
+  bold?: boolean;
+  /** Font family (a built-in single-line font or an installed font). */
+  font?: string;
+  /** Height of the capital letters, mm. */
   height_mm: number;
-  /** The text (printable ASCII is drawn; other characters are skipped). */
+  /** Italic (the family's italic face, else slanted). */
+  italic?: boolean;
+  /** Space added between letters, mm (negative: tighter). */
+  letter_spacing_mm?: number;
+  /** Distance between baselines, times the font's line height. */
+  line_spacing?: number;
+  /** An outline this far around the letters is added, mm (negative: inside). */
+  outline_mm?: number | null;
+  /** The text follows a path. */
+  path?: TextPath | null;
+  /**
+   * Outline fonts: bridges this wide hold the inner parts of the letters (the
+   * middle of an O), mm.
+   */
+  stencil_mm?: number | null;
+  /** Struck through. */
+  strikethrough?: boolean;
+  /** The text; `\n` starts a new line. */
   text: string;
+  /** Underlined. */
+  underline?: boolean;
+  /**
+   * Outline fonts: the letters are merged into one shape where they overlap
+   * (cutting script fonts).
+   */
+  weld?: boolean;
+  /** Horizontal scale of the letters (1 = the font's width). */
+  width_scale?: number;
 };
 
 /** Colour theme of the app. */
@@ -1898,7 +2078,7 @@ export interface Actions {
     result: NewId;
     tier: "edit";
   };
-  /** Writes text in the single-stroke font on a layer (default: the current layer) and selects it; the text stays editable (`document.set_text`). One undo step. */
+  /** Writes text on a layer (default: the current layer) and selects it: a font of `fonts.list` (default Relief SingleLine, single-line), its style, alignment, spacing and effects. The text stays editable (`document.set_text`). One undo step. */
   "document.add_text": {
     params: AddTextParams;
     result: NewId;
@@ -2012,7 +2192,7 @@ export interface Actions {
     result: Changed;
     tier: "edit";
   };
-  /** Adds the outline of shapes (default: the selection) grown or shrunk by `distance_mm`, as new objects on the same layers, selected. One undo step. */
+  /** Adds the outline of shapes (default: the selection) grown or shrunk by `distance_mm`, as new objects on the same layers, selected; open paths (single-line text) are outlined around their strokes when growing. One undo step. */
   "document.offset": {
     params: OffsetParams;
     result: NewIds;
@@ -2078,7 +2258,7 @@ export interface Actions {
     result: Changed;
     tier: "edit";
   };
-  /** Changes a text object's text or font height (its position, rotation and scale stay). One undo step. */
+  /** Changes a text object: its text, height, font, style, alignment, spacing, effects, or where it sits on its path (its position, rotation and scale stay). One undo step. */
   "document.set_text": {
     params: SetTextParams;
     result: Changed;
@@ -2088,6 +2268,24 @@ export interface Actions {
   "document.split": {
     params: IdsParams;
     result: NewIds;
+    tier: "edit";
+  };
+  /** Takes a text off its path: straight again, its baseline starting where the path starts. One undo step. */
+  "document.text_off_path": {
+    params: TextIdParams;
+    result: Changed;
+    tier: "edit";
+  };
+  /** Puts a text on the first path of a shape: the letters stand along it, and follow it whenever the shape changes (moved, scaled, edited); moving the text alone puts it back on the path. Deleting the shape leaves the text where it was. One undo step. */
+  "document.text_on_path": {
+    params: TextOnPathParams;
+    result: Changed;
+    tier: "edit";
+  };
+  /** Turns texts (default: the selected ones) into plain shapes: the letters stay, the text is no longer editable. One undo step. */
+  "document.text_to_paths": {
+    params: IdsParams;
+    result: Changed;
     tier: "edit";
   };
   /** The document as `.fkproj` text. */
@@ -2125,6 +2323,18 @@ export interface Actions {
     params: FireRequestParams;
     result: FireRequest;
     tier: "machine";
+  };
+  /** The font families a text can use: the built-in single-line fonts first, then the installed ones. */
+  "fonts.list": {
+    params: NoParams;
+    result: FontFamily[];
+    tier: "read";
+  };
+  /** A sample of a font family as SVG path data (10 mm high, Y down), for font pickers. */
+  "fonts.preview": {
+    params: FontPreviewParams;
+    result: FontPreview;
+    tier: "read";
   };
   /** Redoes the last undone change. */
   "history.redo": {
@@ -2465,12 +2675,17 @@ export const ACTION_TIERS = {
   "document.set_raster": "edit",
   "document.set_text": "edit",
   "document.split": "edit",
+  "document.text_off_path": "edit",
+  "document.text_on_path": "edit",
+  "document.text_to_paths": "edit",
   "document.to_fkproj": "read",
   "document.transform": "edit",
   "document.translate": "edit",
   "document.update_layer": "edit",
   "fire.cancel": "safety",
   "fire.request": "machine",
+  "fonts.list": "read",
+  "fonts.preview": "read",
   "history.redo": "edit",
   "history.undo": "edit",
   "job.abort": "safety",

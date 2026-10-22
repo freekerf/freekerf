@@ -14,7 +14,7 @@ the same way, with the caller's tier checked on every call.
 | read | `session.snapshot` (revision, selection, current layer, view, undo/redo labels, layers and objects without geometry: bounds, transform, text; objects on the clipboard), `document.get`, `document.to_fkproj`, `view.get` | read |
 | selection and view | `document.select` (replace/add/remove/toggle), `document.select_all`, `document.clear_selection`, `document.copy` (to the session's clipboard: objects and their layers, kept across documents, not an undo step), `document.set_current_layer`, `view.set_mode`, `view.set_tool`, `view.open_panel`, `view.close_panel`, `view.set_viewport`, `view.open_dialog`, `view.close_dialog`, `view.toast`, `view.dismiss_toast`, `view.fit`, `view.focus` | ui |
 | document | `document.new`, `document.from_fkproj`, `document.import_data` (base64 bytes, or text for SVG/DXF), `document.delete`, `document.translate`, `document.move_to_layer`, `document.add_layer`, `document.update_layer`, `document.remove_layer`, `document.move_layer`, `document.layer_for_color`, `history.undo`, `history.redo` | edit |
-| drawing | `document.add_shape` (rectangle, ellipse), `document.add_text`, `document.set_text`, `document.transform` (translate, scale or mirror about a pivot, rotate about a pivot, any matrix), `document.align` (left, center_h, right, top, middle_v, bottom), `document.duplicate`, `document.combine` (shapes into one object per layer; open paths whose ends touch, within 0.01 mm, joined into continuous ones), `document.split` (one object per path), `document.cut`, `document.paste` (each object on the layer of its colour, made with the copied settings when missing; offset, or centred on a point), `document.boolean` (union/weld, difference, intersection, xor of shapes, flattened within 0.01 mm), `document.offset` (a grown or shrunk outline added, round/square/miter corners), `document.array` (a grid of copies) | edit |
+| drawing | `document.add_shape` (rectangle, ellipse), `document.add_text`, `document.set_text` (font, style, alignment, spacing, effects), `document.text_on_path`, `document.text_off_path`, `document.text_to_paths`, `fonts.list`, `fonts.preview`, `document.transform` (translate, scale or mirror about a pivot, rotate about a pivot, any matrix), `document.align` (left, center_h, right, top, middle_v, bottom), `document.duplicate`, `document.combine` (shapes into one object per layer; open paths whose ends touch, within 0.01 mm, joined into continuous ones), `document.split` (one object per path), `document.cut`, `document.paste` (each object on the layer of its colour, made with the copied settings when missing; offset, or centred on a point), `document.boolean` (union/weld, difference, intersection, xor of shapes, flattened within 0.01 mm), `document.offset` (a grown or shrunk outline added, round/square/miter corners; open strokes outlined when growing), `document.array` (a grid of copies) | edit |
 | material test | `document.material_test` (design/ux.md flow 6: a grid of cells, power by row and speed by column, each cell on a layer of its own; labels in single-stroke text on a low-power layer) | edit |
 | images | `document.raster_settings` and `document.raster_preview` (read: the bitmap the settings make, a PNG in base64), `document.set_raster` (edit) | read, edit |
 | files (service) | `document.open`, `document.save`, `document.import` (a path; format from the extension), `job.from_document` (plan the document and load it as the job) | edit |
@@ -27,8 +27,10 @@ the selection where an action takes `ids`.
   when it is gone, the first layer; with no layer at all, a black one is made. It is
   not an undo step; changing it is a `selection` event.
 - New shapes, text and copies are selected (alone), so the next action applies to them.
-- **Text** stays editable: `document.set_text` writes the strokes again through the
-  object's transform ([projects.md](projects.md)).
+- **Text** stays editable: `document.set_text` lays it out again through the
+  object's transform ([text.md](text.md)). The session holds the fonts (built-in,
+  plus the installed ones the service gives). After every document change, texts
+  on a path whose shape changed are laid out again, in the same undo step.
 
 ## Undo, transactions and events
 

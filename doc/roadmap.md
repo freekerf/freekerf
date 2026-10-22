@@ -27,7 +27,9 @@ What was postponed, and open decisions. Milestones are in [PLAN.md](../PLAN.md) 
 | Item | Why | When |
 | --- | --- | --- |
 | Image rotation and skew in the document (objects record their transform since M4b, but images only move and scale) | the raster pipeline takes axis-aligned images | M5 |
-| More single-stroke and outline fonts for text objects (M4b has the Hershey font of the generators) | the editor needs text first | M5 |
+| Mixed styles inside one text (a bold word in a sentence: text spans) | one style per text covers the laser cases first ([text.md](features/text.md)) | v1 |
+| Letters that bend with a path (warped, not only turned), envelope distortion | upright letters on the path are what laser texts need most | v1 |
+| SVG text: `dx`/`dy`/`rotate` per letter, several styles per text | rare in laser files; one style per text for now | v1 |
 | Bundling `autotrace` with the desktop app (built per platform from a pinned commit, source published with each release) | needs the installers (Windows and Linux ones exist since M5: `release.yml`); M2 runs it from the `PATH` (ADR 0010) | M5 |
 | Signed Windows installers (PLAN M5: signed MSI) | needs a code-signing certificate (for example SignPath Foundation for open source) kept as a CI secret; until then Windows SmartScreen warns on first run | M5 |
 | macOS disk image signed with a Developer ID and notarized (`release.yml` builds a universal DMG signed ad hoc since M5, so Gatekeeper asks the user to allow it once) | needs an Apple Developer ID (the Apple Developer Program) kept as CI secrets: the certificate (`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`) and notarization (`APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`), which the Tauri CLI reads; then drop `signingIdentity: "-"` | M5 |

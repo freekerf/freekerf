@@ -1,0 +1,25 @@
+[package]
+name = "freekerf-text"
+description = "Text: single-line and outline fonts, shaping, layout, styles, text on a path and effects"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+freekerf-document.workspace = true
+freekerf-gcode.workspace = true
+freekerf-geometry.workspace = true
+harfrust.workspace = true
+roxmltree.workspace = true
+skrifa.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

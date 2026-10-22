@@ -37,6 +37,8 @@ interface FakeObject {
   paths: [number, number][][];
   transform: Affine;
   text?: TextSpec;
+  /** Texts: where the first baseline starts (object coordinates). */
+  origin?: [number, number];
   /** Images: the raster dialog's settings (the frame is the outline). */
   raster?: RasterSettings;
 }
@@ -163,6 +165,85 @@ function textPaths(text: string, x: number, y: number, h: number): [number, numb
     ]);
   });
   return out.length ? out : [rectPath(x, y, w, h)];
+}
+
+/** The fonts of `fonts.list`: the built-in single-line ones, then two "installed". */
+export const FAKE_FONTS: Result<'fonts.list'> = [
+  ['Relief SingleLine', false, false],
+  ['Hershey Sans', true, false],
+  ['Hershey Serif', true, true],
+  ['Hershey Script', false, false],
+  ['Hershey Gothic English', false, false],
+  ['EMS Readability', false, true],
+  ['EMS Nixish', false, true],
+  ['EMS Allure', false, false],
+  ['EMS Tech', false, false],
+  ['LaserGRBL Hershey', false, false],
+].map(([name, bold, italic]) => ({
+  name: name as string,
+  single_line: true,
+  builtin: true,
+  bold: bold as boolean,
+  italic: italic as boolean,
+}));
+FAKE_FONTS.push(
+  { name: 'DejaVu Sans', single_line: false, builtin: false, bold: true, italic: true },
+  { name: 'Liberation Serif', single_line: false, builtin: false, bold: true, italic: true },
+);
+
+/** The style fields every text action takes. */
+type TextStyle = Omit<Params<'document.add_text'>, 'text' | 'x' | 'y' | 'height_mm' | 'layer'>;
+
+/** `style` applied to `spec` as the session does (0 turns outline, stencil and arc off). */
+function styled(spec: TextSpec, style: TextStyle, action: string): TextSpec {
+  const out: TextSpec = { ...spec };
+  for (const [k, v] of Object.entries(style) as [keyof TextStyle, unknown][]) {
+    if (v === undefined || v === null) continue;
+    if (k === 'outline_mm' || k === 'stencil_mm' || k === 'arc_radius_mm') {
+      if (v === 0) delete out[k];
+      else out[k] = v as number;
+    } else (out as Record<string, unknown>)[k] = v;
+  }
+  if (out.font && !FAKE_FONTS.some((f) => f.name.toLowerCase() === out.font!.toLowerCase()))
+    throw invalid(action, `the font \`${out.font}\` is not available`);
+  if (!(out.height_mm > 0)) throw invalid(action, 'height_mm must be positive');
+  if (out.line_spacing !== undefined && !(out.line_spacing > 0))
+    throw invalid(action, 'line_spacing must be positive');
+  if (out.width_scale !== undefined && !(out.width_scale > 0))
+    throw invalid(action, 'width_scale must be positive');
+  // the defaults are left out, as the session writes them
+  for (const k of ['bold', 'italic', 'underline', 'strikethrough', 'weld'] as const)
+    if (out[k] === false) delete out[k];
+  if (out.align === 'left') delete out.align;
+  if (out.line_spacing === 1) delete out.line_spacing;
+  if (out.width_scale === 1) delete out.width_scale;
+  if (out.letter_spacing_mm === 0) delete out.letter_spacing_mm;
+  return out;
+}
+
+/** A text stand-in laid out like the real one: lines, alignment, spacing, underline. */
+function textLayout(spec: TextSpec, x: number, y: number): [number, number][][] {
+  const h = spec.height_mm;
+  const pitch = 1.5 * h * (spec.line_spacing ?? 1);
+  const out: [number, number][][] = [];
+  spec.text.split('\n').forEach((line, i) => {
+    const cell = h * 0.6 * (spec.width_scale ?? 1) + (spec.letter_spacing_mm ?? 0);
+    const width = cell * [...line].length;
+    const x0 = x + (spec.align === 'center' ? -width / 2 : spec.align === 'right' ? -width : 0);
+    const by = y - i * pitch;
+    out.push(...textPaths(line, x0, by, h).filter((p) => p.length > 0));
+    if (spec.underline)
+      out.push([
+        [x0, by - h * 0.15],
+        [x0 + width, by - h * 0.15],
+      ]);
+    if (spec.strikethrough)
+      out.push([
+        [x0, by + h * 0.35],
+        [x0 + width, by + h * 0.35],
+      ]);
+  });
+  return out.length ? out : [rectPath(x, y, h * 0.6, h)];
 }
 
 function newLayer(id: number, color: Color): Layer {
@@ -422,22 +503,115 @@ export class FakeDocument {
       return { id };
     },
     'document.add_text': (p) => {
-      const h = p.height_mm ?? 10;
-      const id = this.edit('add text', () =>
-        this.add('text', textPaths(p.text, p.x, p.y, h), p.layer, { text: p.text, height_mm: h }),
+      const { text, x, y, height_mm, layer, ...style } = p;
+      const spec = styled(
+        { text, height_mm: height_mm ?? 10, font: 'Relief SingleLine' },
+        style,
+        'document.add_text',
       );
+      const id = this.edit('add text', () => {
+        const id = this.add('text', textLayout(spec, x, y), layer, spec);
+        this.obj(id).origin = [x, y];
+        return id;
+      });
       return { id };
     },
     'document.set_text': (p) => {
-      const changed = this.edit('edit text', () => {
-        const o = this.obj(p.id, 'document.set_text');
-        if (!o.text) throw invalid('document.set_text', `object ${p.id} is not text`);
-        const [x, y] = o.paths[0]?.[0] ?? [0, 0];
-        o.text = { text: p.text ?? o.text.text, height_mm: p.height_mm ?? o.text.height_mm };
-        o.paths = textPaths(o.text.text, x, y, o.text.height_mm);
-        return true;
+      const { id, text, height_mm, path_offset_mm, path_distance_mm, path_flip, ...style } = p;
+      const o = this.obj(id, 'document.set_text');
+      if (!o.text) throw invalid('document.set_text', `object ${id} is not text`);
+      let spec = styled(
+        { ...o.text, text: text ?? o.text.text, height_mm: height_mm ?? o.text.height_mm },
+        style,
+        'document.set_text',
+      );
+      const onPath = [path_offset_mm, path_distance_mm, path_flip].some((v) => v != null);
+      if (onPath && !spec.path) throw invalid('document.set_text', `text ${id} is not on a path`);
+      if (spec.path) {
+        const tp = { ...spec.path };
+        if (path_offset_mm != null) tp.offset_mm = path_offset_mm;
+        if (path_distance_mm != null) tp.distance_mm = path_distance_mm;
+        if (path_flip != null) tp.flip = path_flip;
+        spec = { ...spec, path: tp };
+        delete spec.arc_radius_mm;
+      }
+      if (JSON.stringify(spec) === JSON.stringify(o.text)) return { changed: false };
+      this.edit('edit text', () => {
+        const t = this.obj(id);
+        const [x, y] = t.origin ?? [0, 0];
+        t.text = spec;
+        t.paths = textLayout(spec, x, y);
       });
-      return { changed };
+      return { changed: true };
+    },
+    'document.text_on_path': (p) => {
+      const o = this.obj(p.id, 'document.text_on_path');
+      if (!o.text) throw invalid('document.text_on_path', `object ${p.id} is not text`);
+      if (p.id === p.path) throw invalid('document.text_on_path', 'a text cannot follow itself');
+      const shape = this.obj(p.path, 'document.text_on_path');
+      const line = shape.kind === 'shape' && !shape.text ? shape.paths[0] : undefined;
+      if (!line?.length) throw invalid('document.text_on_path', `object ${p.path} is not a shape`);
+      const pts = line.map(([x, y]) => apply(shape.transform, x, y));
+      const [sx, sy] = pts[0]!;
+      this.edit('text on path', () => {
+        const t = this.obj(p.id);
+        const spec: TextSpec = {
+          ...t.text!,
+          path: {
+            object: p.path,
+            path: {
+              start: { x: sx, y: sy },
+              segments: pts.slice(1).map(([x, y]) => ({ kind: 'line' as const, end: { x, y } })),
+              closed: false,
+            },
+            ...(p.offset_mm ? { offset_mm: p.offset_mm } : {}),
+            ...(p.distance_mm ? { distance_mm: p.distance_mm } : {}),
+            ...(p.flip ? { flip: true } : {}),
+          },
+        };
+        delete spec.arc_radius_mm;
+        t.text = spec;
+        t.transform = IDENTITY;
+        t.origin = [sx + (p.offset_mm ?? 0), sy + (p.distance_mm ?? 0)];
+        t.paths = textLayout(spec, t.origin[0], t.origin[1]);
+      });
+      return { changed: true };
+    },
+    'document.text_off_path': (p) => {
+      const o = this.obj(p.id, 'document.text_off_path');
+      if (!o.text) throw invalid('document.text_off_path', `object ${p.id} is not text`);
+      if (!o.text.path) return { changed: false };
+      this.edit('text off path', () => {
+        const t = this.obj(p.id);
+        const spec = { ...t.text! };
+        delete spec.path;
+        t.text = spec;
+      });
+      return { changed: true };
+    },
+    'document.text_to_paths': (p) => {
+      const ids = this.targets(p.ids).filter((id) => this.doc.objects.some((o) => o.id === id && o.text));
+      if (!ids.length) return { changed: false };
+      this.edit('text to paths', (d) => {
+        for (const o of d.objects.filter((x) => ids.includes(x.id))) {
+          delete o.text;
+          delete o.origin;
+          o.kind = 'shape';
+          o.name = 'path';
+        }
+      });
+      return { changed: true };
+    },
+    'fonts.list': () => structuredClone(FAKE_FONTS),
+    'fonts.preview': (p) => {
+      const font = FAKE_FONTS.find((f) => f.name.toLowerCase() === p.family.toLowerCase());
+      if (!font) throw invalid('fonts.preview', `the font \`${p.family}\` is not available`);
+      const paths = textPaths(p.text ?? 'AaBbÇç 123', 0, 0, 10);
+      const d = paths
+        .map((pts) => pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(2)} ${(-y).toFixed(2)}`).join(' '))
+        .join(' ');
+      const w = Math.max(...paths.flat().map(([x]) => x), 10);
+      return { d, view_box: [0, -10, w, 10], single_line: font.single_line };
     },
     'document.transform': (p) => {
       const m = opMatrix(p.op);

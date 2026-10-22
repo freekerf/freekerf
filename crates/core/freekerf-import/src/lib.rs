@@ -24,7 +24,8 @@ pub mod dxf;
 mod netparse;
 pub mod svg;
 
-use freekerf_document::{Color, Document, Layer, LayerId, ObjectKind, Source};
+use freekerf_document::{Color, Document, Layer, LayerId, ObjectId, ObjectKind, Source, TextSpec};
+use freekerf_geometry::Matrix;
 
 pub use netparse::{parse_double, parse_long};
 
@@ -61,6 +62,46 @@ pub struct ImportedObject {
     pub color: Color,
     /// Content.
     pub kind: ObjectKind,
+    /// An editable text: its spec (the geometry is in `kind`).
+    pub text: Option<TextSpec>,
+    /// The object's transform (a text's, from mm at the origin to the drawing).
+    pub transform: Matrix,
+    /// A text on a path: the index (in [`Import::objects`]) of the object whose
+    /// path it follows.
+    pub link: Option<usize>,
+}
+
+impl ImportedObject {
+    /// An object that is not a text.
+    #[must_use]
+    pub const fn new(color: Color, kind: ObjectKind) -> Self {
+        Self {
+            color,
+            kind,
+            text: None,
+            transform: Matrix::IDENTITY,
+            link: None,
+        }
+    }
+}
+
+/// Makes the imported texts objects' texts: `ids` has the object each imported
+/// object became (`None` when left out), in the import's order. A text whose path
+/// was left out keeps the copy of it.
+pub fn attach_texts(doc: &mut Document, objects: &[ImportedObject], ids: &[Option<ObjectId>]) {
+    for (o, id) in objects.iter().zip(ids) {
+        let (Some(spec), Some(id)) = (&o.text, id) else {
+            continue;
+        };
+        let mut spec = spec.clone();
+        if let Some(tp) = spec.path.as_mut() {
+            tp.object = o.link.and_then(|i| ids.get(i).copied().flatten());
+        }
+        if let Some(added) = doc.object_mut(*id) {
+            added.text = Some(spec);
+            added.transform = o.transform;
+        }
+    }
 }
 
 /// The result of an import.
@@ -87,12 +128,15 @@ impl Import {
                 ids.push((color, id));
             }
         }
-        for o in self.objects {
-            if let Some((_, layer)) = ids.iter().find(|(c, _)| *c == o.color) {
+        let mut added = Vec::with_capacity(self.objects.len());
+        for o in &self.objects {
+            added.push(ids.iter().find(|(c, _)| *c == o.color).and_then(|(_, layer)| {
                 // the layer exists: adding cannot fail
-                let _ = doc.add_object_with(*layer, o.kind, String::new(), source.cloned());
-            }
+                doc.add_object_with(*layer, o.kind.clone(), String::new(), source.cloned())
+                    .ok()
+            }));
         }
+        attach_texts(&mut doc, &self.objects, &added);
         doc
     }
 
@@ -102,9 +146,15 @@ impl Import {
     pub fn into_single_layer(self, source: Option<&Source>) -> Document {
         let mut doc = Document::new();
         let layer = doc.add_layer(Layer::new(LayerId(0), Color::BLACK, 0, 0));
-        for o in self.objects {
-            let _ = doc.add_object_with(layer, o.kind, String::new(), source.cloned());
-        }
+        let added: Vec<Option<ObjectId>> = self
+            .objects
+            .iter()
+            .map(|o| {
+                doc.add_object_with(layer, o.kind.clone(), String::new(), source.cloned())
+                    .ok()
+            })
+            .collect();
+        attach_texts(&mut doc, &self.objects, &added);
         doc
     }
 
@@ -150,14 +200,8 @@ mod tests {
                 },
             ],
             objects: vec![
-                ImportedObject {
-                    color: red,
-                    kind: shape(0.0),
-                },
-                ImportedObject {
-                    color: Color::BLACK,
-                    kind: shape(1.0),
-                },
+                ImportedObject::new(red, shape(0.0)),
+                ImportedObject::new(Color::BLACK, shape(1.0)),
             ],
         };
         let d = imp.clone().into_document_with_defaults(1000, 500, None);

@@ -34,13 +34,14 @@ pub use image::{
 };
 pub use layer::{Color, FillSettings, LaserMode, Layer, LayerId, LayerMode};
 pub use object::{
-    Object, ObjectId, ObjectKind, Source, SourceFormat, TextSpec, UnsupportedReason, ellipse_path, rect_path,
+    LEGACY_FONT, Object, ObjectId, ObjectKind, Source, SourceFormat, TextAlign, TextPath, TextSpec,
+    UnsupportedReason, ellipse_path, rect_path,
 };
 
 /// Value of the `format` field of a project file.
 pub const FORMAT: &str = "freekerf-project";
 /// Current version of the project file.
-pub const VERSION: u32 = 3;
+pub const VERSION: u32 = 4;
 
 /// Errors of documents and project files.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -315,6 +316,10 @@ impl Document {
         // 2 -> 3: layers may carry `laser_mode` (`machine` when absent), so nothing
         //         changes either; the version keeps older FreeKerf from planning a
         //         dynamic-power layer with the machine's command
+        // 3 -> 4: texts carry a font and a style; a text without `font` is in the
+        //         Hershey font it was written in (`LEGACY_FONT`), the style fields
+        //         are optional, so nothing changes in `value`; the version keeps
+        //         older FreeKerf from dropping the style when it saves
         let mut doc: Self =
             serde_json::from_value(value).map_err(|e| DocumentError::Invalid(e.to_string()))?;
         doc.version = VERSION;
@@ -515,6 +520,47 @@ mod tests {
     }
 
     #[test]
+    fn version_3_texts_open_in_the_legacy_font_and_style_round_trips() {
+        let v3 = r##"{"format": "freekerf-project", "version": 3,
+            "layers": [{"id": 1, "color": "#000000", "speed_mm_min": 1000, "power": 1000}],
+            "objects": [{"id": 1, "layer": 1, "kind": "shape", "paths": [],
+                "text": {"text": "Hi", "height_mm": 5}}],
+            "next_object_id": 2}"##;
+        let d = Document::from_fkproj(v3.as_bytes()).unwrap();
+        assert_eq!(d.version, VERSION);
+        let spec = d.objects[0].text.clone().unwrap();
+        assert_eq!(spec, TextSpec::new("Hi", 5.0, LEGACY_FONT));
+        // the defaults are left out; the font is always written
+        let text = d.to_fkproj();
+        assert!(
+            text.contains("\"font\": \"LaserGRBL Hershey\"") && !text.contains("line_spacing"),
+            "{text}"
+        );
+        let mut styled = d;
+        let t = styled.objects[0].text.as_mut().unwrap();
+        t.bold = true;
+        t.align = TextAlign::Center;
+        t.outline_mm = Some(1.5);
+        t.path = Some(TextPath {
+            object: Some(ObjectId(7)),
+            path: Path::polyline(&[Point::ZERO, Point::new(10.0, 0.0)], false),
+            offset_mm: 2.0,
+            distance_mm: 0.0,
+            flip: true,
+        });
+        let text = styled.to_fkproj();
+        assert!(
+            text.contains("\"align\": \"center\"") && text.contains("\"flip\": true"),
+            "{text}"
+        );
+        assert_eq!(Document::from_fkproj(text.as_bytes()).unwrap(), styled);
+        assert_eq!(
+            styled.objects[0].text.as_ref().unwrap().linked_path(),
+            Some(ObjectId(7))
+        );
+    }
+
+    #[test]
     fn version_1_files_open_as_version_2() {
         let v1 = r##"{"format": "freekerf-project", "version": 1,
             "layers": [{"id": 1, "color": "#000000", "speed_mm_min": 1000, "power": 1000}],
@@ -527,10 +573,7 @@ mod tests {
         assert_eq!(d.objects[0].transform, Matrix::IDENTITY);
         // version 2 keeps text and transform, and leaves them out when unused
         let mut d2 = d.clone();
-        d2.objects[0].text = Some(TextSpec {
-            text: "Hi".into(),
-            height_mm: 5.0,
-        });
+        d2.objects[0].text = Some(TextSpec::new("Hi", 5.0, LEGACY_FONT));
         d2.objects[0]
             .apply_transform(&Matrix::translation(3.0, 4.0))
             .unwrap();
@@ -567,10 +610,7 @@ mod tests {
         assert!(e.min_x.abs() < 1e-9 && (e.max_x - 20.0).abs() < 1e-9 && (e.max_y - 10.0).abs() < 1e-9);
         // text strokes are written again through the transform
         o.set_text_paths(
-            TextSpec {
-                text: "-".into(),
-                height_mm: 2.0,
-            },
+            TextSpec::new("-", 2.0, LEGACY_FONT),
             &[Path::polyline(
                 &[Point::new(0.0, 0.0), Point::new(1.0, 0.0)],
                 false,

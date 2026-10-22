@@ -6,6 +6,11 @@ All notable changes to FreeKerf are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-22
+
+The first installers: Windows (.exe, .msi), macOS (universal .dmg) and Linux
+(AppImage, .deb, Flatpak), built by the release train on `stable` (ADR 0018).
+
 ### Added
 
 - Workspace in layers (core, config, native, runtime, apps, testing) with

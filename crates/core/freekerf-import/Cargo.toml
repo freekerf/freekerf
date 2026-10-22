@@ -12,6 +12,7 @@ publish.workspace = true
 [dependencies]
 freekerf-document.workspace = true
 freekerf-geometry.workspace = true
+freekerf-text.workspace = true
 roxmltree.workspace = true
 thiserror.workspace = true
 

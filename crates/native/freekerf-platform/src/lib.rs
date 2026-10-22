@@ -1,9 +1,14 @@
-//! Operating system services: where FreeKerf keeps its files, and writing them
-//! safely (a crash never leaves a half-written settings file).
+//! Operating system services: where FreeKerf keeps its files, writing them
+//! safely (a crash never leaves a half-written settings file), and the installed
+//! fonts ([`SystemFonts`]).
 
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+
+mod fonts;
+
+pub use fonts::SystemFonts;
 
 /// Errors of the platform layer.
 #[derive(Debug, thiserror::Error)]
@@ -93,6 +98,12 @@ impl Dirs {
     #[must_use]
     pub fn data_file(&self, name: &str) -> PathBuf {
         self.data.join(name)
+    }
+
+    /// The user's own fonts (TrueType, OpenType, single-line SVG fonts).
+    #[must_use]
+    pub fn fonts_dir(&self) -> PathBuf {
+        self.data.join("fonts")
     }
 }
 

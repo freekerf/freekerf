@@ -1,6 +1,6 @@
 [package]
 name = "freekerf-planner"
-description = "Document to job: layer order, fillings, path order, G-code writing, generators and Hershey text"
+description = "Document to job: layer order, fillings, path order, G-code writing, generators (Hershey labels)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -15,6 +15,7 @@ freekerf-gcode.workspace = true
 freekerf-geometry.workspace = true
 freekerf-import.workspace = true
 freekerf-raster.workspace = true
+freekerf-text.workspace = true
 schemars.workspace = true
 serde.workspace = true
 thiserror.workspace = true

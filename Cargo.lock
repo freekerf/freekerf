@@ -348,6 +348,20 @@ name = "bytemuck"
 version = "1.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95832e849adfb21180ccb6826a99da14e5d266ae5c2e668e1602cf234f153797"
+dependencies = [
+ "bytemuck_derive",
+]
+
+[[package]]
+name = "bytemuck_derive"
+version = "1.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a1f896587b6f2c069c73d2f0913e2d590c3990285cd2f0b6aa02b786b4c679c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.6",
+]
 
 [[package]]
 name = "byteorder"
@@ -1266,6 +1280,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
+name = "font-types"
+version = "0.12.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "835ae9d781464a79026cde387f9cbc650c9a4909d7cf7e658b127e3c35d2f35d"
+dependencies = [
+ "bytemuck",
+]
+
+[[package]]
+name = "fontconfig-parser"
+version = "0.5.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbc773e24e02d4ddd8395fd30dc147524273a83e54e0f312d986ea30de5f5646"
+dependencies = [
+ "roxmltree 0.20.0",
+]
+
+[[package]]
+name = "fontdb"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2660c5e9157bf76d2db1294e4a9feba604ef610819a3b591088d0d8392a3290f"
+dependencies = [
+ "fontconfig-parser",
+ "log",
+ "slotmap",
+ "tinyvec",
+]
+
+[[package]]
 name = "foreign-types"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1313,7 +1357,7 @@ dependencies = [
 
 [[package]]
 name = "freekerf-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1333,7 +1377,7 @@ dependencies = [
 
 [[package]]
 name = "freekerf-desktop"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "freekerf-service",
  "serde",
@@ -1346,7 +1390,7 @@ dependencies = [
 
 [[package]]
 name = "freekerf-document"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "freekerf-geometry",
@@ -1359,7 +1403,7 @@ dependencies = [
 
 [[package]]
 name = "freekerf-emulator"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "freekerf-gcode",
  "proptest",
@@ -1368,7 +1412,7 @@ dependencies = [
 
 [[package]]
 name = "freekerf-gcode"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "criterion",
  "proptest",
@@ -1380,7 +1424,7 @@ dependencies = [
 
 [[package]]
 name = "freekerf-geometry"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "proptest",
  "schemars 1.2.2",
@@ -1391,18 +1435,19 @@ dependencies = [
 
 [[package]]
 name = "freekerf-import"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "freekerf-document",
  "freekerf-geometry",
+ "freekerf-text",
  "proptest",
- "roxmltree",
+ "roxmltree 0.21.1",
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "freekerf-ipc"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "crossbeam-channel",
  "getrandom 0.3.4",
@@ -1417,7 +1462,7 @@ dependencies = [
 
 [[package]]
 name = "freekerf-it"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "freekerf-document",
  "freekerf-emulator",
@@ -1440,7 +1485,7 @@ version = "0.1.0"
 source = "git+https://github.com/freekerf/library?rev=e27f3c07001739d436d074b7871b0f475db82856#e27f3c07001739d436d074b7871b0f475db82856"
 dependencies = [
  "jsonschema",
- "roxmltree",
+ "roxmltree 0.21.1",
  "schemars 1.2.2",
  "semver",
  "serde",
@@ -1456,7 +1501,7 @@ dependencies = [
 
 [[package]]
 name = "freekerf-machine"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "crossbeam-channel",
  "freekerf-emulator",
@@ -1470,7 +1515,7 @@ dependencies = [
 
 [[package]]
 name = "freekerf-materials"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "freekerf-document",
  "freekerf-library",
@@ -1482,7 +1527,7 @@ dependencies = [
 
 [[package]]
 name = "freekerf-mcp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "crossbeam-channel",
  "freekerf-ipc",
@@ -1495,7 +1540,7 @@ dependencies = [
 
 [[package]]
 name = "freekerf-migrate"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "freekerf-protocol",
  "freekerf-settings",
@@ -1508,13 +1553,14 @@ dependencies = [
 
 [[package]]
 name = "freekerf-planner"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "freekerf-document",
  "freekerf-gcode",
  "freekerf-geometry",
  "freekerf-import",
  "freekerf-raster",
+ "freekerf-text",
  "proptest",
  "schemars 1.2.2",
  "serde",
@@ -1524,16 +1570,19 @@ dependencies = [
 
 [[package]]
 name = "freekerf-platform"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "directories",
+ "fontdb",
+ "freekerf-text",
  "tempfile",
  "thiserror 2.0.21",
+ "tracing",
 ]
 
 [[package]]
 name = "freekerf-protocol"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "freekerf-emulator",
  "freekerf-gcode",
@@ -1547,7 +1596,7 @@ dependencies = [
 
 [[package]]
 name = "freekerf-raster"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "freekerf-document",
  "freekerf-gcode",
@@ -1562,7 +1611,7 @@ dependencies = [
 
 [[package]]
 name = "freekerf-script"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "freekerf-session",
  "rquickjs",
@@ -1573,7 +1622,7 @@ dependencies = [
 
 [[package]]
 name = "freekerf-service"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "crossbeam-channel",
  "freekerf-document",
@@ -1592,6 +1641,7 @@ dependencies = [
  "freekerf-session",
  "freekerf-settings",
  "freekerf-testkit",
+ "freekerf-text",
  "freekerf-transport",
  "schemars 1.2.2",
  "serde",
@@ -1604,7 +1654,7 @@ dependencies = [
 
 [[package]]
 name = "freekerf-session"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "freekerf-document",
@@ -1612,6 +1662,7 @@ dependencies = [
  "freekerf-import",
  "freekerf-planner",
  "freekerf-raster",
+ "freekerf-text",
  "schemars 1.2.2",
  "serde",
  "serde_json",
@@ -1620,7 +1671,7 @@ dependencies = [
 
 [[package]]
 name = "freekerf-settings"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "freekerf-protocol",
  "freekerf-session",
@@ -1633,7 +1684,7 @@ dependencies = [
 
 [[package]]
 name = "freekerf-testkit"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "freekerf-emulator",
  "freekerf-gcode",
@@ -1641,8 +1692,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "freekerf-text"
+version = "0.1.1"
+dependencies = [
+ "freekerf-document",
+ "freekerf-gcode",
+ "freekerf-geometry",
+ "harfrust",
+ "proptest",
+ "roxmltree 0.21.1",
+ "skrifa",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "freekerf-transport"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "crossbeam-channel",
  "freekerf-emulator",
@@ -2037,6 +2102,19 @@ dependencies = [
  "cfg-if",
  "crunchy",
  "zerocopy",
+]
+
+[[package]]
+name = "harfrust"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "865dcc4105d51c323d8fedbb2d75b5e9c8ecddf5613f74c82f851d0afbc97114"
+dependencies = [
+ "bitflags 2.13.2",
+ "bytemuck",
+ "read-fonts",
+ "smallvec",
+ "yoke",
 ]
 
 [[package]]
@@ -3722,6 +3800,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "read-fonts"
+version = "0.46.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bdaa4fffe9ff3ca2c353fa9729792805b9b3e324695ff5a081f860612e81b330"
+dependencies = [
+ "bytemuck",
+ "foldhash",
+ "font-types",
+ "once_cell",
+ "smallvec",
+ "yoke",
+]
+
+[[package]]
 name = "recvmsg"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3854,6 +3946,12 @@ dependencies = [
  "wasm-streams",
  "web-sys",
 ]
+
+[[package]]
+name = "roxmltree"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "roxmltree"
@@ -4302,10 +4400,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33f4fe9184a62d842c9ef383018f3306d8ba224fd9d836f56d7288308847c256"
 
 [[package]]
+name = "skrifa"
+version = "0.49.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7459fb60888ad9a5f367dd293fa2fb9df142cb451aa6bfd6cd66a7d6a9b739d"
+dependencies = [
+ "bytemuck",
+ "once_cell",
+ "read-fonts",
+ "smallvec",
+ "yoke",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
+
+[[package]]
+name = "slotmap"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bdd58c3c93c3d278ca835519292445cb4b0d4dc59ccfdf7ceadaab3f8aeb4038"
+dependencies = [
+ "version_check",
+]
 
 [[package]]
 name = "smallvec"
@@ -6129,13 +6249,13 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "freekerf-document",
  "freekerf-service",
  "freekerf-settings",
- "roxmltree",
+ "roxmltree 0.21.1",
  "schemars 1.2.2",
  "serde",
  "serde_json",

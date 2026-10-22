@@ -10,8 +10,11 @@ the same layers, settings and file, the G-code is identical (conformance goldens
 
 - **Elements:** `path` (all commands: `M L H V C S Q T A Z`, absolute and relative),
   `rect` (rounded corners as arcs), `circle` (a `G3` circle), `ellipse`, `line`,
-  `polyline`, `polygon`, in groups `g` nested up to 9 levels. `text` and `image` are
-  not converted; they are kept as *unsupported* objects (a comment in the G-code).
+  `polyline`, `polygon`, in groups `g` nested up to 9 levels. `image` is not
+  converted: an *unsupported* object (a comment in the G-code). `text` is read as
+  editable text when the import has fonts (`SvgOptions::fonts`, FreeKerf's own
+  import: [text.md](text.md)), else kept as unsupported like LaserGRBL does (the
+  conformance `import-case`).
 - **Order:** per container, LaserGRBL's order: rects, circles, ellipses, lines,
   polylines, polygons (texts, images), then paths, then groups.
 - **Colour of an element:** its stroke if it has one, otherwise its fill, inherited
@@ -47,8 +50,9 @@ let document = imported.into_document_with_defaults(1000, 1000, Some(source));
 
 ## Limits
 
-- No CSS stylesheets (`<style>`), `use`/`symbol`, clip paths or masks; text must be
-  converted to paths first.
+- No CSS stylesheets (`<style>`), `use`/`symbol`, clip paths or masks. A text has
+  one style (that of its first `tspan`); `dx`/`dy` shifts and rotated letters are
+  not read.
 - Numbers in path data with an upper-case exponent (`1E3`) are read as LaserGRBL
   reads them (the `E` starts a new, unknown command).
 - An arc with a zero radius draws nothing, as in LaserGRBL (DIV-035).

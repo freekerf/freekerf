@@ -9,8 +9,9 @@ guide is how to work on what exists.
 FreeKerf designs jobs and drives laser machines (Grbl, grblHAL, Smoothie, Marlin,
 VigoWork). It is the GPL-3.0-or-later successor of LaserGRBL, in Rust. Done so far:
 M0 (workspace, CI, docs), M1 (headless machine core and the `freekerf` CLI), M2 (document,
-importers, planner, session, scripts, MCP), M4a (desktop app shell in Tauri 2 + Svelte 5)
-and M4b (the Design mode on the real document, automation in the app).
+importers, planner, session, scripts, MCP), M4a (desktop app shell in Tauri 2 + Svelte 5),
+M4b (the Design mode on the real document, automation in the app) and fonts and
+text effects for text objects.
 The behaviour of LaserGRBL's core is specified by
 [`freekerf/conformance`](https://github.com/freekerf/conformance); FreeKerf passes
 its protocol and golden (G-code) layers, and its importer goldens as the importers
@@ -25,6 +26,8 @@ crates/core/       pure logic, no I/O, builds for wasm32
   freekerf-document    project model (layers, objects, cut/raster settings), .fkproj
   freekerf-import      SVG / DXF bytes -> document (colour layers)
   freekerf-raster      bitmaps: image operations, dithering, Line2Line, Potrace vectorize
+  freekerf-text        text: built-in single-line fonts, TrueType/OpenType (skrifa, harfrust),
+                       layout, styles, text on a path, effects; Hershey text of the generators
   freekerf-planner     document -> G-code (LaserGRBL writer, images), generators, Hershey
   freekerf-protocol    sans-IO host state machine (port of GrblCore) + firmware variants
   freekerf-emulator    sans-IO Grbl 1.1 device (simulator, tests)
@@ -36,7 +39,7 @@ crates/config/     persistent data
   freekerf-migrate     LaserGRBL import, read only: BinaryFormatter reader, settings, laser counters
 crates/native/     operating system and hardware
   freekerf-transport   Transport trait: serial, emulator, emulator on a PTY
-  freekerf-platform    directories, atomic writes, running external programs
+  freekerf-platform    directories, atomic writes, running external programs, installed fonts (fontdb)
   freekerf-ipc         single instance, local endpoint (Unix socket / named pipe), token, JSON Lines
 crates/runtime/    orchestration
   freekerf-machine     I/O thread: host + link + clock, priority STOP
@@ -79,7 +82,7 @@ cargo xtask sync-tokens                      # tokens, icons, fonts from ../desi
 cargo xtask resx2ftl --lasergrbl <checkout>  # LaserGRBL translations that apply → ui/i18n/*/lasergrbl.ftl
 cargo llvm-cov --workspace --exclude xtask --exclude freekerf-testkit --exclude freekerf-desktop --summary-only
 cargo bench -p freekerf-gcode                # 1M-line analysis (doc/benchmarks.md)
-cargo build --target wasm32-unknown-unknown -p freekerf-gcode -p freekerf-protocol -p freekerf-emulator -p freekerf-session -p freekerf-geometry -p freekerf-document -p freekerf-planner -p freekerf-import -p freekerf-raster
+cargo build --target wasm32-unknown-unknown -p freekerf-gcode -p freekerf-protocol -p freekerf-emulator -p freekerf-session -p freekerf-geometry -p freekerf-document -p freekerf-planner -p freekerf-import -p freekerf-raster -p freekerf-text
 cargo deny check
 cd fuzz && cargo +nightly fuzz run svg       # fuzz targets: gcode, svg, dxf, nrbf (doc/fuzzing.md)
 

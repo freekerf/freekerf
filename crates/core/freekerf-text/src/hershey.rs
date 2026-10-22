@@ -1,4 +1,5 @@
-//! Hershey text: labels of the test generators (`Hershey.CreateString`). Each
+//! Hershey text: labels of the test generators (`Hershey.CreateString`), and the
+//! strokes of [`crate::LEGACY_FONT`] texts. Each
 //! character is a list of G-code fragments with coordinates relative to the glyph;
 //! they are offset to their place and written with `double.ToString()` (15
 //! significant digits, so floating point noise such as `Y0.00299999999999989` is
@@ -9,7 +10,7 @@ use freekerf_gcode::dotnet::double_to_string;
 use crate::hershey_table::{HORIZONTAL, VERTICAL};
 
 /// Space between characters, mm.
-const SPACE_BETWEEN_LETTERS: f64 = 0.3;
+pub(crate) const SPACE_BETWEEN_LETTERS: f64 = 0.3;
 
 /// The `[XY]-?\d+(\.\d+)?` tokens of a fragment: (start, end) byte offsets.
 fn coordinates(s: &str) -> Vec<(usize, usize)> {
@@ -145,48 +146,66 @@ pub fn text(
 /// Height of the glyphs of the horizontal font, in font units (`text` uses 2).
 pub const GLYPH_HEIGHT: f64 = 2.0;
 
+/// The strokes of one character of the horizontal font, font units, and its width
+/// (nothing for characters outside printable ASCII).
+pub(crate) fn glyph_strokes(c: char) -> (Vec<Vec<(f64, f64)>>, f64) {
+    let Some(g) = u16::try_from(u32::from(c)).ok().and_then(|c| glyph(c, true)) else {
+        return (Vec::new(), 0.0);
+    };
+    let (_, w, _) = apply_offset(g, 0.0, 0.0);
+    let (mut px, mut py) = (0.0f64, 0.0f64);
+    let mut on = false;
+    let mut out: Vec<Vec<(f64, f64)>> = Vec::new();
+    let mut cur: Vec<(f64, f64)> = Vec::new();
+    for part in g {
+        if part.starts_with("M3") {
+            on = true;
+            cur = vec![(px, py)];
+            continue;
+        }
+        if part.starts_with("M5") {
+            on = false;
+            if cur.len() > 1 {
+                out.push(std::mem::take(&mut cur));
+            }
+            continue;
+        }
+        for (a, b) in coordinates(part) {
+            let v: f64 = part[a + 1..b].parse().unwrap_or(0.0);
+            if &part[a..=a] == "X" {
+                px = v;
+            } else {
+                py = v;
+            }
+        }
+        if on {
+            cur.push((px, py));
+        }
+    }
+    if cur.len() > 1 {
+        out.push(cur);
+    }
+    (out, w)
+}
+
 /// The strokes of `text` as polylines in mm: the bottom-left corner of the text at
-/// `(x, y)`, glyphs scaled so the font's height is `height_mm`, Y up (editable text
-/// objects of the editor; characters outside printable ASCII are skipped).
+/// `(x, y)`, glyphs scaled so the font's height is `height_mm`, Y up (characters
+/// outside printable ASCII are skipped).
 #[must_use]
 pub fn text_polylines(text: &str, x: f64, y: f64, height_mm: f64) -> Vec<Vec<(f64, f64)>> {
     let k = height_mm / GLYPH_HEIGHT;
     let mut out: Vec<Vec<(f64, f64)>> = Vec::new();
     let mut ox = 0.0;
-    for c in text.encode_utf16() {
-        let Some(g) = glyph(c, true) else { continue };
-        let (_, w, _) = apply_offset(g, 0.0, 0.0);
-        let (mut px, mut py) = (0.0f64, 0.0f64);
-        let mut on = false;
-        let mut cur: Vec<(f64, f64)> = Vec::new();
-        for part in g {
-            if part.starts_with("M3") {
-                on = true;
-                cur = vec![((ox + px) * k + x, py * k + y)];
-                continue;
-            }
-            if part.starts_with("M5") {
-                on = false;
-                if cur.len() > 1 {
-                    out.push(std::mem::take(&mut cur));
-                }
-                continue;
-            }
-            for (a, b) in coordinates(part) {
-                let v: f64 = part[a + 1..b].parse().unwrap_or(0.0);
-                if &part[a..=a] == "X" {
-                    px = v;
-                } else {
-                    py = v;
-                }
-            }
-            if on {
-                cur.push(((ox + px) * k + x, py * k + y));
-            }
+    for c in text.chars() {
+        if !(' '..='~').contains(&c) {
+            continue;
         }
-        if cur.len() > 1 {
-            out.push(cur);
-        }
+        let (strokes, w) = glyph_strokes(c);
+        out.extend(strokes.into_iter().map(|s| {
+            s.into_iter()
+                .map(|(px, py)| ((ox + px) * k + x, py * k + y))
+                .collect()
+        }));
         ox += w + SPACE_BETWEEN_LETTERS;
     }
     out

@@ -82,3 +82,20 @@ logo in a way that suggests endorsement by the project.
 Bundled third-party assets of the desktop app (ui/CREDITS.md):
 - Inter, JetBrains Mono and Space Grotesk fonts (subsets), SIL Open Font License 1.1
   (ui/web/public/fonts/OFL.txt).
+
+Single-line fonts compiled into crates/core/freekerf-text (fonts/):
+- Relief SingleLine (ReliefSingleLine-Regular.svg), Copyright (c) the Relief
+  SingleLine authors (https://github.com/isdat-type/Relief-SingleLine), SIL Open
+  Font License 1.1 (fonts/OFL-Relief.txt).
+- EMS Readability, EMS Readability Italic, EMS Nixish, EMS Nixish Italic, EMS
+  Allure and EMS Tech (EMS*.svg), Evil Mad Scientist Laboratories, from Inkscape's
+  Hershey Text extension (https://gitlab.com/inkscape/extensions), SIL Open Font
+  License 1.1 (fonts/OFL-EMS.txt).
+- Hershey Sans, Serif, Script and Gothic English (Hershey*.svg), from Inkscape's
+  Hershey Text extension, under the Hershey Fonts licence, which asks for this
+  acknowledgement:
+  - The Hershey Fonts were originally created by Dr. A. V. Hershey while working
+    at the U. S. National Bureau of Standards.
+  - The format of the Font data in this distribution was originally created by
+    James Hurt, Cognition, Inc., 900 Technology Park Drive, Billerica, MA 01821
+    (mit-eddie!ci-dandelion!hurt).

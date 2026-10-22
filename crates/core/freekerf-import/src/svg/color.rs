@@ -13,7 +13,7 @@ use crate::netparse::parse_double;
 
 /// `GetProperty`: the value of `name` in the `style` attribute (first declaration,
 /// `!important` removed), else the presentation attribute.
-fn property(node: Node<'_, '_>, name: &str) -> Option<String> {
+pub(super) fn property(node: Node<'_, '_>, name: &str) -> Option<String> {
     if let Some(style) = node.attribute("style") {
         for decl in style.split(';') {
             if let Some(sep) = decl.find(':')
@@ -29,7 +29,7 @@ fn property(node: Node<'_, '_>, name: &str) -> Option<String> {
 
 /// `GetInheritedProperty`: the property on the element or its nearest ancestor that
 /// sets it to something other than `inherit`.
-fn inherited(node: Node<'_, '_>, name: &str) -> Option<String> {
+pub(super) fn inherited(node: Node<'_, '_>, name: &str) -> Option<String> {
     let mut current = Some(node);
     while let Some(n) = current {
         if n.is_element()

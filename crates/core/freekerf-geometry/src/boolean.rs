@@ -107,6 +107,22 @@ pub fn offset(
     Ok(from_int(&o.execute(delta * scale)?, scale))
 }
 
+/// The outline of open polylines thickened by `delta` units on each side, with
+/// round ends (a stroke drawn with a pen of width `2 × delta`).
+///
+/// # Errors
+/// Coordinates out of range at `scale`.
+pub fn offset_open(
+    lines: &[Vec<Point>],
+    delta: f64,
+    arc_tolerance: f64,
+    scale: f64,
+) -> Result<Vec<Vec<Point>>, ClipperError> {
+    let mut o = ClipperOffset::new(2.0, arc_tolerance * scale);
+    o.add_paths(&to_int(lines, scale), JoinType::Round, EndType::OpenRound);
+    Ok(from_int(&o.execute(delta.abs() * scale)?, scale))
+}
+
 /// Signed area of a polygon (positive counterclockwise, Y up).
 #[must_use]
 pub fn signed_area(poly: &[Point]) -> f64 {
@@ -167,5 +183,9 @@ mod tests {
             (area - (144.0 - 4.0 + std::f64::consts::PI)).abs() < 0.1,
             "{area}"
         );
+        // a 10 mm stroke 2 mm wide: a 10 × 2 band and two half discs
+        let stroke = offset_open(&[vec![Point::ZERO, Point::new(10.0, 0.0)]], 1.0, 0.001, s).unwrap();
+        let area = total(&stroke).abs();
+        assert!((area - (20.0 + std::f64::consts::PI)).abs() < 0.01, "{area}");
     }
 }

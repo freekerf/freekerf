@@ -38,7 +38,16 @@ proptest! {
             r#"<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="10mm" viewBox="0 0 10 10"><g transform="{transform}"><path d="{d}" stroke="red"/><polygon points="{d}"/><rect width="{w}" height="2" rx="1"/><ellipse rx="1" ry="0"/></g></svg>"#
         );
         let _ = svg::import(text.as_bytes(), &SvgOptions::default());
-        let _ = svg::import(text.as_bytes(), &SvgOptions { scale_to_mm: Some(10.0), user_offset: (1.0, 2.0), legacy_bezier: true });
+        let _ = svg::import(text.as_bytes(), &SvgOptions { scale_to_mm: Some(10.0), user_offset: (1.0, 2.0), legacy_bezier: true, fonts: None });
+    }
+
+    #[test]
+    fn svg_texts_never_panic(d in path_data(), size in "[0-9a-z%.]{0,6}", offset in "[0-9%.-]{0,5}", body in "[ a-zA-Z0-9\\n]{0,12}") {
+        let text = format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="10mm" height="10mm" viewBox="0 0 10 10"><path id="p" d="{d}"/><text font-size="{size}" style="letter-spacing:{offset}"><tspan y="1">{body}</tspan><textPath href="#p" startOffset="{offset}">{body}</textPath></text></svg>"##
+        );
+        let fonts = SvgOptions { fonts: Some(freekerf_text::Fonts::builtin()), ..SvgOptions::default() };
+        let _ = svg::import(text.as_bytes(), &fonts);
     }
 
     #[test]

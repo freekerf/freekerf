@@ -12,7 +12,7 @@ Every action can be dispatched by name with JSON parameters (`host --stdio`, lat
 | `console.get` | read | Console rows (sent commands, answers, messages). |
 | `document.add_layer` | edit | Adds a layer of a colour (line, 1000 mm/min, power 1000, 1 pass unless given). One undo step. |
 | `document.add_shape` | edit | Draws a rectangle or an ellipse on a layer (default: the current layer) and selects it. One undo step. |
-| `document.add_text` | edit | Writes text in the single-stroke font on a layer (default: the current layer) and selects it; the text stays editable (`document.set_text`). One undo step. |
+| `document.add_text` | edit | Writes text on a layer (default: the current layer) and selects it: a font of `fonts.list` (default Relief SingleLine, single-line), its style, alignment, spacing and effects. The text stays editable (`document.set_text`). One undo step. |
 | `document.align` | edit | Lines up objects (default: the selection, at least two) on the box around them: left, center_h, right, top, middle_v or bottom. One undo step. |
 | `document.array` | edit | Copies objects (default: the selection) in a grid of `columns` × `rows` (the originals are the top-left cell; rows go down), `gap_mm` apart; selects the originals and the copies. One undo step. |
 | `document.boolean` | edit | Combines shapes (default: the selection, at least two) into one: union (weld), difference (the first in drawing order minus the others), intersection or xor. The result takes the first one's layer and is selected. One undo step. |
@@ -31,7 +31,7 @@ Every action can be dispatched by name with JSON parameters (`host --stdio`, lat
 | `document.move_layer` | edit | Moves a layer in the layer list (the order of layers of the same mode is the order they run). One undo step. |
 | `document.move_to_layer` | edit | Moves objects (default: the selection) to another layer. One undo step. |
 | `document.new` | edit | Starts an empty document (the undo history starts again). |
-| `document.offset` | edit | Adds the outline of shapes (default: the selection) grown or shrunk by `distance_mm`, as new objects on the same layers, selected. One undo step. |
+| `document.offset` | edit | Adds the outline of shapes (default: the selection) grown or shrunk by `distance_mm`, as new objects on the same layers, selected; open paths (single-line text) are outlined around their strokes when growing. One undo step. |
 | `document.open` | edit | Opens a `.fkproj` project file (the undo history starts again). |
 | `document.paste` | edit | Adds the clipboard's objects (`document.copy`, `document.cut`) and selects them: each on the layer of its colour, created with the copied settings when missing. Offset by `offset_mm`, or centred on `at_mm`, by default `[5, -5]` mm once more for every paste in the document they were copied from. One undo step. |
 | `document.raster_preview` | read | The bitmap an image object's raster settings (or the ones given) make: grey levels, or black and white when dithered; a PNG, base64. |
@@ -42,14 +42,19 @@ Every action can be dispatched by name with JSON parameters (`host --stdio`, lat
 | `document.select_all` | ui | Selects every object. |
 | `document.set_current_layer` | ui | Chooses the layer new shapes and text go to. |
 | `document.set_raster` | edit | Changes the raster dialog's settings of an image object. One undo step. |
-| `document.set_text` | edit | Changes a text object's text or font height (its position, rotation and scale stay). One undo step. |
+| `document.set_text` | edit | Changes a text object: its text, height, font, style, alignment, spacing, effects, or where it sits on its path (its position, rotation and scale stay). One undo step. |
 | `document.split` | edit | Splits shapes (default: the selection) made of several paths into one object per path, on the same layer; texts and images are left as they are. The pieces are selected. One undo step. |
+| `document.text_off_path` | edit | Takes a text off its path: straight again, its baseline starting where the path starts. One undo step. |
+| `document.text_on_path` | edit | Puts a text on the first path of a shape: the letters stand along it, and follow it whenever the shape changes (moved, scaled, edited); moving the text alone puts it back on the path. Deleting the shape leaves the text where it was. One undo step. |
+| `document.text_to_paths` | edit | Turns texts (default: the selected ones) into plain shapes: the letters stay, the text is no longer editable. One undo step. |
 | `document.to_fkproj` | read | The document as `.fkproj` text. |
 | `document.transform` | edit | Moves, scales, mirrors or rotates objects (default: the selection): `{translate}`, `{scale, pivot}`, `{rotate_deg, pivot}` or `{matrix}`. Images only move and scale. One undo step. |
 | `document.translate` | edit | Moves objects (default: the selection) by `dx`, `dy` mm. One undo step. |
 | `document.update_layer` | edit | Changes a layer's name, mode, speed, power, passes, visibility, filling or laser mode (M3/M4). One undo step. |
 | `fire.cancel` | safety | Cancels the pending laser request (the one given, or any). Always allowed. |
 | `fire.request` | machine | Asks to run a laser action: it opens the fire confirmation (checklist and countdown) and runs only when a person confirms on screen. Returns the pending request. |
+| `fonts.list` | read | The font families a text can use: the built-in single-line fonts first, then the installed ones. |
+| `fonts.preview` | read | A sample of a font family as SVG path data (10 mm high, Y down), for font pickers. |
 | `history.redo` | edit | Redoes the last undone change. |
 | `history.undo` | edit | Undoes the last document change. |
 | `job.abort` | safety | Stops streaming the job and sends `M5` (lines already in the board still run; use machine.stop to stop at once). Always allowed. |
@@ -162,15 +167,28 @@ Draws a rectangle or an ellipse on a layer (default: the current layer) and sele
 
 ### `document.add_text`
 
-Writes text in the single-stroke font on a layer (default: the current layer) and selects it; the text stays editable (`document.set_text`). One undo step.
+Writes text on a layer (default: the current layer) and selects it: a font of `fonts.list` (default Relief SingleLine, single-line), its style, alignment, spacing and effects. The text stays editable (`document.set_text`). One undo step.
 
 | Parameter | Required | Description |
 | --- | --- | --- |
-| `height_mm` | no | Height of the font, mm (default 10). |
+| `align` | no | Alignment of the lines. |
+| `arc_radius_mm` | no | Bend the text on a circle of this radius, mm (negative: along its bottom; 0: straight). Not for a text on a path. |
+| `bold` | no | Bold. |
+| `font` | no | Font family (`fonts.list`; default for a new text: Relief SingleLine). |
+| `height_mm` | no | Height of the capitals, mm (default 10). |
+| `italic` | no | Italic. |
 | `layer` | no | Layer id (default: the current layer; a black layer when there is none). |
-| `text` | yes | The text (printable ASCII is drawn; other characters are skipped). |
-| `x` | yes | Left of the first letter, mm. |
-| `y` | yes | Baseline, mm (Y up). |
+| `letter_spacing_mm` | no | Space added between letters, mm (default 0). |
+| `line_spacing` | no | Distance between baselines, times the font's line height (default 1). |
+| `outline_mm` | no | Add an outline this far around the letters, mm (negative: inside; 0: none). |
+| `stencil_mm` | no | Outline fonts: stencil bridges this wide, mm (0: none). |
+| `strikethrough` | no | Struck through. |
+| `text` | yes | The text; `\n` starts a new line. |
+| `underline` | no | Underlined. |
+| `weld` | no | Outline fonts: merge overlapping letters into one shape. |
+| `width_scale` | no | Horizontal scale of the letters (default 1). |
+| `x` | yes | Where the first baseline starts (left), is centred or ends (right), mm. |
+| `y` | yes | Baseline of the first line, mm (Y up). |
 
 ### `document.align`
 
@@ -333,7 +351,7 @@ No parameters.
 
 ### `document.offset`
 
-Adds the outline of shapes (default: the selection) grown or shrunk by `distance_mm`, as new objects on the same layers, selected. One undo step.
+Adds the outline of shapes (default: the selection) grown or shrunk by `distance_mm`, as new objects on the same layers, selected; open paths (single-line text) are outlined around their strokes when growing. One undo step.
 
 | Parameter | Required | Description |
 | --- | --- | --- |
@@ -425,17 +443,61 @@ Changes the raster dialog's settings of an image object. One undo step.
 
 ### `document.set_text`
 
-Changes a text object's text or font height (its position, rotation and scale stay). One undo step.
+Changes a text object: its text, height, font, style, alignment, spacing, effects, or where it sits on its path (its position, rotation and scale stay). One undo step.
 
 | Parameter | Required | Description |
 | --- | --- | --- |
-| `height_mm` | no | New height of the font, mm. |
+| `align` | no | Alignment of the lines. |
+| `arc_radius_mm` | no | Bend the text on a circle of this radius, mm (negative: along its bottom; 0: straight). Not for a text on a path. |
+| `bold` | no | Bold. |
+| `font` | no | Font family (`fonts.list`; default for a new text: Relief SingleLine). |
+| `height_mm` | no | New height of the capitals, mm. |
 | `id` | yes | Id of a text object. |
+| `italic` | no | Italic. |
+| `letter_spacing_mm` | no | Space added between letters, mm (default 0). |
+| `line_spacing` | no | Distance between baselines, times the font's line height (default 1). |
+| `outline_mm` | no | Add an outline this far around the letters, mm (negative: inside; 0: none). |
+| `path_distance_mm` | no | On a path: distance of the baseline from it, mm. |
+| `path_flip` | no | On a path: follow it backwards (the other side). |
+| `path_offset_mm` | no | On a path: where the text starts along it, mm. |
+| `stencil_mm` | no | Outline fonts: stencil bridges this wide, mm (0: none). |
+| `strikethrough` | no | Struck through. |
 | `text` | no | New text. |
+| `underline` | no | Underlined. |
+| `weld` | no | Outline fonts: merge overlapping letters into one shape. |
+| `width_scale` | no | Horizontal scale of the letters (default 1). |
 
 ### `document.split`
 
 Splits shapes (default: the selection) made of several paths into one object per path, on the same layer; texts and images are left as they are. The pieces are selected. One undo step.
+
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `ids` | no | Object ids (default: the selection). |
+
+### `document.text_off_path`
+
+Takes a text off its path: straight again, its baseline starting where the path starts. One undo step.
+
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `id` | yes | Id of a text object. |
+
+### `document.text_on_path`
+
+Puts a text on the first path of a shape: the letters stand along it, and follow it whenever the shape changes (moved, scaled, edited); moving the text alone puts it back on the path. Deleting the shape leaves the text where it was. One undo step.
+
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `distance_mm` | no | Distance of the baseline from the path, mm (default 0). |
+| `flip` | no | Follow the path backwards (default false). |
+| `id` | yes | Id of a text object. |
+| `offset_mm` | no | Where the text starts along the path, mm (default 0). |
+| `path` | yes | Id of the shape whose first path the text follows (it follows it when it changes). |
+
+### `document.text_to_paths`
+
+Turns texts (default: the selected ones) into plain shapes: the letters stay, the text is no longer editable. One undo step.
 
 | Parameter | Required | Description |
 | --- | --- | --- |
@@ -499,6 +561,23 @@ Asks to run a laser action: it opens the fire confirmation (checklist and countd
 | --- | --- | --- |
 | `action` | yes | An action of tier `laser` (`job.run`, `job.resume`, `machine.send`, `machine.custom_code`). |
 | `params` | no | Its parameters. |
+
+### `fonts.list`
+
+The font families a text can use: the built-in single-line fonts first, then the installed ones.
+
+No parameters.
+
+### `fonts.preview`
+
+A sample of a font family as SVG path data (10 mm high, Y down), for font pickers.
+
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `bold` | no | Bold. |
+| `family` | yes | Font family. |
+| `italic` | no | Italic. |
+| `text` | no | Sample text (default `AaBbÇç 123`). |
 
 ### `history.redo`
 

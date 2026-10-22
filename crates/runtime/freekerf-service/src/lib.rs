@@ -191,6 +191,8 @@ pub struct Stores {
     pub macros: Option<std::path::PathBuf>,
     /// LaserGRBL's data folder, read by the welcome flow's migration.
     pub lasergrbl: Option<std::path::PathBuf>,
+    /// Installed fonts for texts (only the built-in fonts when `None`).
+    pub fonts: Option<Arc<dyn freekerf_text::FontSource>>,
 }
 
 impl std::fmt::Debug for Stores {
@@ -200,6 +202,7 @@ impl std::fmt::Debug for Stores {
             .field("cache", &self.cache.is_some())
             .field("macros", &self.macros)
             .field("lasergrbl", &self.lasergrbl)
+            .field("fonts", &self.fonts.is_some())
             .finish()
     }
 }
@@ -222,6 +225,9 @@ impl Stores {
             lasergrbl: std::env::var_os("FREEKERF_LASERGRBL_DIR")
                 .map(std::path::PathBuf::from)
                 .or_else(migrate::default_lasergrbl_dir),
+            fonts: Some(Arc::new(freekerf_platform::SystemFonts::new(Some(
+                dirs.fonts_dir(),
+            )))),
         })
     }
 
@@ -347,6 +353,10 @@ impl Service {
             host.set_laser_life(freekerf_protocol::LaserLife::with_counters(cache.laser_life));
         }
         let machine = Machine::start(host, Arc::new(SystemClock::default()));
+        let mut session = Session::new();
+        if let Some(fonts) = &stores.fonts {
+            session.set_fonts(freekerf_text::Fonts::with_source(fonts.clone()));
+        }
         let inner = Arc::new(Inner {
             machine,
             settings: Mutex::new(settings),
@@ -357,7 +367,7 @@ impl Service {
             console: Arc::new(Mutex::new(VecDeque::new())),
             issues: Arc::new(Mutex::new(Vec::new())),
             subscribers: Arc::new(Mutex::new(Vec::new())),
-            session: Mutex::new(Session::new()),
+            session: Mutex::new(session),
             scripts: Mutex::new(Vec::new()),
             permissions: permissions::Permissions::default(),
             automation: Mutex::new(automation::State::default()),

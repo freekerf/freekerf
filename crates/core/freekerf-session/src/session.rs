@@ -87,6 +87,8 @@ pub struct Session {
     clipboard: Clipboard,
     /// Grows with every replaced document (new, opened).
     generation: u64,
+    /// The fonts texts are laid out with.
+    fonts: freekerf_text::Fonts,
 }
 
 /// The state as a front end or an agent reads it (`session.snapshot`).
@@ -340,6 +342,7 @@ impl Session {
             let sel = self.selection.clone();
             let changed = f(&mut self.document, &mut self.selection)?;
             if changed {
+                freekerf_text::follow_paths(&mut self.document, &self.fonts);
                 let doc = &self.document;
                 self.selection.retain(|id| doc.object(*id).is_some());
                 if let Some(t) = &mut self.transaction {
@@ -357,6 +360,8 @@ impl Session {
         match f(&mut self.document, &mut self.selection) {
             Ok(false) => Ok(false),
             Ok(true) => {
+                // texts on a path that changed follow it, in the same step
+                freekerf_text::follow_paths(&mut self.document, &self.fonts);
                 // ids that no longer exist leave the selection
                 let doc = &self.document;
                 self.selection.retain(|id| doc.object(*id).is_some());
@@ -377,6 +382,17 @@ impl Session {
                 Err(e)
             }
         }
+    }
+
+    /// The fonts texts are laid out with.
+    #[must_use]
+    pub const fn fonts(&self) -> &freekerf_text::Fonts {
+        &self.fonts
+    }
+
+    /// Sets the fonts (the host adds the installed ones to the built-in fonts).
+    pub fn set_fonts(&mut self, fonts: freekerf_text::Fonts) {
+        self.fonts = fonts;
     }
 
     /// Replaces the selection (not an undo step).
@@ -512,6 +528,7 @@ impl Session {
         let Clipboard { objects, layers, .. } = self.clipboard.clone();
         let mut new = Vec::new();
         self.edit("paste", |d, sel| {
+            let mut pairs = Vec::new();
             for mut o in objects {
                 let Some(from) = layers.iter().find(|l| l.id == o.layer) else {
                     continue;
@@ -529,8 +546,10 @@ impl Session {
                     added.text = o.text;
                     added.transform = o.transform;
                 }
+                pairs.push((o.id, id));
                 new.push(id);
             }
+            freekerf_text::relink_copies(d, &pairs);
             *sel = new.iter().copied().collect();
             Ok(!new.is_empty())
         })?;

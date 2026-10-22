@@ -1226,18 +1226,160 @@
         }
       ]
     },
-    "TextSpec": {
-      "description": "The text an object was made from (editable: the editor writes the strokes again\nwhen the text or its height change, at the origin, then applies the object's\n`transform`). Single-stroke Hershey font of the test generators.",
+    "TextAlign": {
+      "description": "How the lines of a text line up.",
+      "oneOf": [
+        {
+          "description": "Lines start at the origin.",
+          "type": "string",
+          "const": "left"
+        },
+        {
+          "description": "Lines are centred on the origin.",
+          "type": "string",
+          "const": "center"
+        },
+        {
+          "description": "Lines end at the origin.",
+          "type": "string",
+          "const": "right"
+        },
+        {
+          "description": "Lines (but the last) fill the width of the longest one; on a path, the\ntext fills the path.",
+          "type": "string",
+          "const": "justify"
+        }
+      ]
+    },
+    "TextPath": {
+      "description": "The baseline a text follows.",
       "type": "object",
       "properties": {
-        "height_mm": {
-          "description": "Height of the font, mm.",
+        "distance_mm": {
+          "description": "Distance of the baseline from the path, mm (positive: to the left of the\npath's direction, where the letters stand).",
           "type": "number",
           "format": "double"
         },
+        "flip": {
+          "description": "Follow the path backwards (the text goes to its other side).",
+          "type": "boolean"
+        },
+        "object": {
+          "description": "The object whose first path is the baseline: the text follows it when it\nchanges. `None` once that object is gone (the text keeps the last copy).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ObjectId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "offset_mm": {
+          "description": "Where the text starts along the path, mm (with the alignment).",
+          "type": "number",
+          "format": "double"
+        },
+        "path": {
+          "description": "The baseline as it was at the last layout, mm (document coordinates).",
+          "$ref": "#/$defs/Path"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "TextSpec": {
+      "description": "The text an object was made from (editable: the editor lays it out again when\nthe text, its font or its style change, at the origin, then applies the\nobject's `transform`; a text on a linked path is laid out along that path).",
+      "type": "object",
+      "properties": {
+        "align": {
+          "description": "Alignment of the lines.",
+          "$ref": "#/$defs/TextAlign"
+        },
+        "arc_radius_mm": {
+          "description": "The text is bent along a circle of this radius, mm, centred under it\n(negative: above it, the text reads along the bottom).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "bold": {
+          "description": "Bold (the family's bold face, else drawn thicker).",
+          "type": "boolean"
+        },
+        "font": {
+          "description": "Font family (a built-in single-line font or an installed font).",
+          "type": "string",
+          "default": "LaserGRBL Hershey"
+        },
+        "height_mm": {
+          "description": "Height of the capital letters, mm.",
+          "type": "number",
+          "format": "double"
+        },
+        "italic": {
+          "description": "Italic (the family's italic face, else slanted).",
+          "type": "boolean"
+        },
+        "letter_spacing_mm": {
+          "description": "Space added between letters, mm (negative: tighter).",
+          "type": "number",
+          "format": "double"
+        },
+        "line_spacing": {
+          "description": "Distance between baselines, times the font's line height.",
+          "type": "number",
+          "format": "double"
+        },
+        "outline_mm": {
+          "description": "An outline this far around the letters is added, mm (negative: inside).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "path": {
+          "description": "The text follows a path.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextPath"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stencil_mm": {
+          "description": "Outline fonts: bridges this wide hold the inner parts of the letters (the\nmiddle of an O), mm.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "strikethrough": {
+          "description": "Struck through.",
+          "type": "boolean"
+        },
         "text": {
-          "description": "The text (printable ASCII is drawn; other characters are skipped).",
+          "description": "The text; `\\n` starts a new line.",
           "type": "string"
+        },
+        "underline": {
+          "description": "Underlined.",
+          "type": "boolean"
+        },
+        "weld": {
+          "description": "Outline fonts: the letters are merged into one shape where they overlap\n(cutting script fonts).",
+          "type": "boolean"
+        },
+        "width_scale": {
+          "description": "Horizontal scale of the letters (1 = the font's width).",
+          "type": "number",
+          "format": "double"
         }
       },
       "required": [

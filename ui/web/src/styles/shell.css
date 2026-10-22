@@ -516,8 +516,11 @@ textarea {
   background: color-mix(in srgb, var(--fk-color-surface-1) 92%, transparent);
   color: var(--fk-color-text);
   font-family: inherit;
+  line-height: 1.25;
   box-shadow: var(--fk-elevation-2);
   outline: none;
+  resize: none;
+  overflow: hidden;
 }
 
 .canvas-tools {

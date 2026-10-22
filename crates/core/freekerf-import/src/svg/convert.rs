@@ -12,10 +12,11 @@
 
 use std::collections::HashMap;
 
-use freekerf_document::{Color, ObjectKind, UnsupportedReason};
+use freekerf_document::{Color, ObjectKind, TextPath, TextSpec, UnsupportedReason};
 use freekerf_geometry::{Matrix, Path, Point, Segment, bezier};
 use roxmltree::Node;
 
+use super::text::{self, StartOffset, SvgText};
 use super::{SvgItem, SvgOptions, color};
 use crate::ImportError;
 use crate::netparse::parse_double;
@@ -285,6 +286,10 @@ pub(super) struct Converter<'o> {
     current: Option<Path>,
     items: Vec<SvgItem>,
     last_end: HashMap<Color, Point>,
+    /// Item of each element with an `id` (the paths texts follow).
+    ids: HashMap<String, usize>,
+    /// Texts to lay out once every path is known: item, text, matrix at the text.
+    texts: Vec<(usize, SvgText, Matrix)>,
 }
 
 impl<'o> Converter<'o> {
@@ -311,6 +316,8 @@ impl<'o> Converter<'o> {
             current: None,
             items: Vec::new(),
             last_end: HashMap::new(),
+            ids: HashMap::new(),
+            texts: Vec::new(),
         }
     }
 
@@ -319,7 +326,123 @@ impl<'o> Converter<'o> {
         self.basic_elements(root, 1)?;
         self.path_elements(root, 1)?;
         self.groups(root, 1)?;
+        self.lay_out_texts(root);
         Ok(self.items)
+    }
+
+    /// Remembers the item an element with an `id` made.
+    fn record_id(&mut self, e: Node<'_, '_>, before: usize) {
+        if self.items.len() > before
+            && let Some(id) = e.attribute("id")
+        {
+            self.ids.entry(id.to_owned()).or_insert(before);
+        }
+    }
+
+    /// A `text` element: an item laid out at the end ([`Self::lay_out_texts`]).
+    fn text_item(&mut self, e: Node<'_, '_>) {
+        let Some(t) = text::read(e) else { return };
+        self.end_item();
+        self.texts.push((self.items.len(), t, self.matrix_element));
+        self.items
+            .push(SvgItem::new(self.color, ObjectKind::Shape { paths: Vec::new() }));
+    }
+
+    /// The first path of the element `id` that no item made (a `path` in `defs`).
+    fn unconverted_path(&self, root: Node<'_, '_>, id: &str) -> Option<Path> {
+        let e = root
+            .descendants()
+            .find(|n| self.is(*n, "path") && n.attribute("id") == Some(id))?;
+        let mut sub = Converter::new(self.opts);
+        sub.ns.clone_from(&self.ns);
+        sub.matrix_group = self.matrix_group;
+        sub.matrix_element = self.matrix_group[0];
+        sub.scaled_error = self.scaled_error;
+        sub.path_element(e, 1).ok()?;
+        sub.items.into_iter().find_map(|i| match i.kind {
+            ObjectKind::Shape { paths } => paths.into_iter().next(),
+            _ => None,
+        })
+    }
+
+    /// Lays the texts out with the import's fonts: straight from their position
+    /// (the object's transform takes them from mm at the origin to the drawing),
+    /// or on the path a `textPath` names. A text that cannot be laid out stays a
+    /// "not supported" item.
+    fn lay_out_texts(&mut self, root: Node<'_, '_>) {
+        let Some(fonts) = self.opts.fonts.clone() else {
+            return;
+        };
+        for (index, t, m) in std::mem::take(&mut self.texts) {
+            let mm_per_unit = m.determinant().abs().sqrt();
+            let family = t
+                .family
+                .clone()
+                .filter(|f| fonts.face(f, false, false).is_ok())
+                .unwrap_or_else(|| freekerf_text::DEFAULT_FONT.to_owned());
+            let Ok(face) = fonts.face(&family, t.bold, t.italic) else {
+                continue;
+            };
+            let mut spec = TextSpec::new(
+                t.lines.join("\n"),
+                t.size * mm_per_unit * face.face.cap_height_per_em(),
+                family,
+            );
+            spec.bold = t.bold;
+            spec.italic = t.italic;
+            spec.underline = t.underline;
+            spec.strikethrough = t.strikethrough;
+            spec.align = t.align;
+            spec.letter_spacing_mm = t.letter_spacing * mm_per_unit;
+            let mut transform = Matrix::IDENTITY;
+            let mut link = None;
+            if let Some(on) = &t.path {
+                link = self.ids.get(&on.id).copied();
+                let path = link
+                    .and_then(|i| match &self.items[i].kind {
+                        ObjectKind::Shape { paths } => paths.first().cloned(),
+                        _ => None,
+                    })
+                    .or_else(|| self.unconverted_path(root, &on.id));
+                if let Some(path) = path {
+                    let offset_mm = match on.start {
+                        StartOffset::Length(l) => l * mm_per_unit,
+                        StartOffset::Percent(p) => p / 100.0 * path.length(),
+                    };
+                    spec.path = Some(TextPath {
+                        object: None,
+                        path,
+                        offset_mm,
+                        distance_mm: 0.0,
+                        flip: on.flip,
+                    });
+                } else {
+                    link = None;
+                }
+            }
+            if spec.path.is_none() {
+                // local mm, Y up -> user units, Y down -> the drawing's mm
+                transform = Matrix::new(1.0 / mm_per_unit, 0.0, 0.0, -1.0 / mm_per_unit, t.x, t.y);
+                transform.append(&m);
+            }
+            let item = &mut self.items[index];
+            match freekerf_text::layout(&spec, &fonts) {
+                Ok(paths) if mm_per_unit > 0.0 => {
+                    item.kind = ObjectKind::Shape {
+                        paths: paths.iter().map(|p| p.transformed(&transform, 0.01)).collect(),
+                    };
+                    item.text = Some(spec);
+                    item.transform = transform;
+                    item.link = link;
+                }
+                _ => {
+                    item.kind = ObjectKind::Unsupported {
+                        element: "text".into(),
+                        reason: UnsupportedReason::NotConverted,
+                    };
+                }
+            }
+        }
     }
 
     fn is(&self, node: Node<'_, '_>, name: &str) -> bool {
@@ -403,13 +526,13 @@ impl<'o> Converter<'o> {
 
     fn comment_item(&mut self, element: &str, reason: UnsupportedReason) {
         self.end_item();
-        self.items.push(SvgItem {
-            color: self.color,
-            kind: ObjectKind::Unsupported {
+        self.items.push(SvgItem::new(
+            self.color,
+            ObjectKind::Unsupported {
                 element: element.to_owned(),
                 reason,
             },
-        });
+        ));
     }
 
     fn end_item(&mut self) {
@@ -419,10 +542,8 @@ impl<'o> Converter<'o> {
             if let Some(end) = paths.last().map(Path::end) {
                 self.last_end.insert(self.color, end);
             }
-            self.items.push(SvgItem {
-                color: self.color,
-                kind: ObjectKind::Shape { paths },
-            });
+            self.items
+                .push(SvgItem::new(self.color, ObjectKind::Shape { paths }));
         }
     }
 
@@ -558,6 +679,7 @@ impl<'o> Converter<'o> {
         ] {
             let elements: Vec<_> = node.children().filter(|c| self.is(*c, form)).collect();
             for e in elements {
+                let before = self.items.len();
                 self.color = color::resolve(e);
                 let old = self.matrix_element;
                 self.transform(e, false, level)?;
@@ -641,9 +763,11 @@ impl<'o> Converter<'o> {
                             self.stop_path();
                         }
                     }
+                    "text" if self.opts.fonts.is_some() => self.text_item(e),
                     _ => self.comment_item(form, UnsupportedReason::NotConverted),
                 }
                 self.end_item();
+                self.record_id(e, before);
                 self.matrix_element = old;
             }
         }
@@ -654,26 +778,34 @@ impl<'o> Converter<'o> {
     fn path_elements(&mut self, node: Node<'_, '_>, level: usize) -> Result<(), ImportError> {
         let elements: Vec<_> = node.children().filter(|c| self.is(*c, "path")).collect();
         for e in elements {
-            // a path without `d` makes LaserGRBL throw and lose the whole file (DIV-032)
-            let Some(d) = e.attribute("d") else {
-                continue;
-            };
-            self.color = color::resolve(e);
-            self.current_x = 0.0;
-            self.current_y = 0.0;
-            self.first = None;
-            self.start_path = true;
-            self.start_sub_path = true;
-            self.last_x = 0.0;
-            self.last_y = 0.0;
-            let old = self.matrix_element;
-            self.transform(e, false, level)?;
-            for token in path_tokens(d) {
-                self.path_command(token);
-            }
-            self.end_item();
-            self.matrix_element = old;
+            let before = self.items.len();
+            self.path_element(e, level)?;
+            self.record_id(e, before);
         }
+        Ok(())
+    }
+
+    /// One `path` element.
+    fn path_element(&mut self, e: Node<'_, '_>, level: usize) -> Result<(), ImportError> {
+        // a path without `d` makes LaserGRBL throw and lose the whole file (DIV-032)
+        let Some(d) = e.attribute("d") else {
+            return Ok(());
+        };
+        self.color = color::resolve(e);
+        self.current_x = 0.0;
+        self.current_y = 0.0;
+        self.first = None;
+        self.start_path = true;
+        self.start_sub_path = true;
+        self.last_x = 0.0;
+        self.last_y = 0.0;
+        let old = self.matrix_element;
+        self.transform(e, false, level)?;
+        for token in path_tokens(d) {
+            self.path_command(token);
+        }
+        self.end_item();
+        self.matrix_element = old;
         Ok(())
     }
 

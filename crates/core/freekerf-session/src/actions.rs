@@ -9,7 +9,7 @@ use std::sync::{Mutex, MutexGuard};
 use base64::Engine;
 use freekerf_document::{
     Bytes, Color, Document, ImageData, ImageObject, Layer, LayerId, LayerMode, Object, ObjectId, ObjectKind,
-    RasterSettings, Source, SourceFormat, TextSpec, ellipse_path, rect_path,
+    RasterSettings, Source, SourceFormat, TextAlign, TextPath, TextSpec, ellipse_path, rect_path,
 };
 use freekerf_geometry::hatch::FillPattern;
 use freekerf_geometry::{Matrix, Path, Point, Rect};
@@ -422,34 +422,194 @@ struct AddShapeParams {
     layer: Option<u32>,
 }
 
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-struct AddTextParams {
-    /// The text (printable ASCII is drawn; other characters are skipped).
-    text: String,
-    /// Left of the first letter, mm.
-    x: f64,
-    /// Baseline, mm (Y up).
-    y: f64,
-    /// Height of the font, mm (default 10).
-    #[serde(default)]
-    height_mm: Option<f64>,
-    /// Layer id (default: the current layer; a black layer when there is none).
-    #[serde(default)]
-    layer: Option<u32>,
+/// A text action's parameters plus the style fields every text action takes
+/// (all optional: unchanged, or the default of a new text), and `style`, which
+/// applies them to a spec.
+macro_rules! with_text_style {
+    ($(#[$m:meta])* struct $name:ident { $($(#[$fm:meta])* $f:ident: $t:ty,)* }) => {
+        $(#[$m])*
+        struct $name {
+            $($(#[$fm])* $f: $t,)*
+            /// Font family (`fonts.list`; default for a new text: Relief SingleLine).
+            #[serde(default)]
+            font: Option<String>,
+            /// Bold.
+            #[serde(default)]
+            bold: Option<bool>,
+            /// Italic.
+            #[serde(default)]
+            italic: Option<bool>,
+            /// Underlined.
+            #[serde(default)]
+            underline: Option<bool>,
+            /// Struck through.
+            #[serde(default)]
+            strikethrough: Option<bool>,
+            /// Alignment of the lines.
+            #[serde(default)]
+            align: Option<TextAlign>,
+            /// Distance between baselines, times the font's line height (default 1).
+            #[serde(default)]
+            line_spacing: Option<f64>,
+            /// Space added between letters, mm (default 0).
+            #[serde(default)]
+            letter_spacing_mm: Option<f64>,
+            /// Horizontal scale of the letters (default 1).
+            #[serde(default)]
+            width_scale: Option<f64>,
+            /// Outline fonts: merge overlapping letters into one shape.
+            #[serde(default)]
+            weld: Option<bool>,
+            /// Add an outline this far around the letters, mm (negative: inside; 0: none).
+            #[serde(default)]
+            outline_mm: Option<f64>,
+            /// Outline fonts: stencil bridges this wide, mm (0: none).
+            #[serde(default)]
+            stencil_mm: Option<f64>,
+            /// Bend the text on a circle of this radius, mm (negative: along its
+            /// bottom; 0: straight). Not for a text on a path.
+            #[serde(default)]
+            arc_radius_mm: Option<f64>,
+        }
+
+        impl $name {
+            fn style(&self, s: &mut TextSpec) {
+                let some = |v: f64| (v != 0.0).then_some(v);
+                if let Some(v) = &self.font {
+                    s.font.clone_from(v);
+                }
+                s.bold = self.bold.unwrap_or(s.bold);
+                s.italic = self.italic.unwrap_or(s.italic);
+                s.underline = self.underline.unwrap_or(s.underline);
+                s.strikethrough = self.strikethrough.unwrap_or(s.strikethrough);
+                s.align = self.align.unwrap_or(s.align);
+                s.line_spacing = self.line_spacing.unwrap_or(s.line_spacing);
+                s.letter_spacing_mm = self.letter_spacing_mm.unwrap_or(s.letter_spacing_mm);
+                s.width_scale = self.width_scale.unwrap_or(s.width_scale);
+                s.weld = self.weld.unwrap_or(s.weld);
+                if let Some(v) = self.outline_mm {
+                    s.outline_mm = some(v);
+                }
+                if let Some(v) = self.stencil_mm {
+                    s.stencil_mm = some(v);
+                }
+                if let Some(v) = self.arc_radius_mm {
+                    s.arc_radius_mm = some(v);
+                }
+            }
+        }
+    };
+}
+
+with_text_style! {
+    #[derive(Deserialize, JsonSchema)]
+    #[serde(deny_unknown_fields)]
+    struct AddTextParams {
+        /// The text; `\n` starts a new line.
+        text: String,
+        /// Where the first baseline starts (left), is centred or ends (right), mm.
+        x: f64,
+        /// Baseline of the first line, mm (Y up).
+        y: f64,
+        /// Height of the capitals, mm (default 10).
+        #[serde(default)]
+        height_mm: Option<f64>,
+        /// Layer id (default: the current layer; a black layer when there is none).
+        #[serde(default)]
+        layer: Option<u32>,
+    }
+}
+
+with_text_style! {
+    #[derive(Deserialize, JsonSchema)]
+    #[serde(deny_unknown_fields)]
+    struct SetTextParams {
+        /// Id of a text object.
+        id: u64,
+        /// New text.
+        #[serde(default)]
+        text: Option<String>,
+        /// New height of the capitals, mm.
+        #[serde(default)]
+        height_mm: Option<f64>,
+        /// On a path: where the text starts along it, mm.
+        #[serde(default)]
+        path_offset_mm: Option<f64>,
+        /// On a path: distance of the baseline from it, mm.
+        #[serde(default)]
+        path_distance_mm: Option<f64>,
+        /// On a path: follow it backwards (the other side).
+        #[serde(default)]
+        path_flip: Option<bool>,
+    }
 }
 
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-struct SetTextParams {
+struct TextOnPathParams {
     /// Id of a text object.
     id: u64,
-    /// New text.
+    /// Id of the shape whose first path the text follows (it follows it when it
+    /// changes).
+    path: u64,
+    /// Where the text starts along the path, mm (default 0).
+    #[serde(default)]
+    offset_mm: Option<f64>,
+    /// Distance of the baseline from the path, mm (default 0).
+    #[serde(default)]
+    distance_mm: Option<f64>,
+    /// Follow the path backwards (default false).
+    #[serde(default)]
+    flip: Option<bool>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct TextIdParams {
+    /// Id of a text object.
+    id: u64,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct FontPreviewParams {
+    /// Font family.
+    family: String,
+    /// Sample text (default `AaBbÇç 123`).
     #[serde(default)]
     text: Option<String>,
-    /// New height of the font, mm.
+    /// Bold.
     #[serde(default)]
-    height_mm: Option<f64>,
+    bold: bool,
+    /// Italic.
+    #[serde(default)]
+    italic: bool,
+}
+
+/// A font family of `fonts.list`.
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct FontFamily {
+    /// Family name (a text's `font`).
+    pub name: String,
+    /// Single-line (open strokes, one pass per stroke).
+    pub single_line: bool,
+    /// Built into FreeKerf.
+    pub builtin: bool,
+    /// Has a bold face (else bold is drawn thicker).
+    pub bold: bool,
+    /// Has an italic face (else italic is slanted).
+    pub italic: bool,
+}
+
+/// A sample of a font (`fonts.preview`).
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct FontPreview {
+    /// SVG path data of the sample 10 mm high, mm, Y down (for `<path d>`).
+    pub d: String,
+    /// `[x, y, width, height]` of the sample, mm, Y down (for `viewBox`).
+    pub view_box: [f64; 4],
+    /// Single-line: draw with a stroke, not a fill.
+    pub single_line: bool,
 }
 
 /// A transform of `document.transform`.
@@ -720,6 +880,32 @@ fn polygons(o: &Object) -> Vec<Vec<Point>> {
     }
 }
 
+/// Polygons or polylines, mm.
+type Polylines = Vec<Vec<Point>>;
+
+/// An object's closed paths as polygons, and its open paths as polylines.
+fn open_and_closed(o: &Object) -> (Polylines, Polylines) {
+    let (mut closed, mut open) = (Vec::new(), Vec::new());
+    if let ObjectKind::Shape { paths } = &o.kind {
+        for p in paths {
+            let pts = p.to_polyline(POLYGON_TOLERANCE_MM);
+            let ends_meet = pts.len() > 2
+                && pts
+                    .first()
+                    .zip(pts.last())
+                    .is_some_and(|(a, b)| a.distance(*b) < 1e-9);
+            if p.closed || ends_meet {
+                if pts.len() >= 3 {
+                    closed.push(pts);
+                }
+            } else if pts.len() >= 2 {
+                open.push(pts);
+            }
+        }
+    }
+    (closed, open)
+}
+
 fn closed_paths(polys: Vec<Vec<Point>>) -> Vec<Path> {
     polys.into_iter().map(|p| Path::polyline(&p, true)).collect()
 }
@@ -881,21 +1067,9 @@ fn test_color(i: usize, n: usize) -> Color {
     Color::rgb(c(r), c(g), c(b))
 }
 
-/// Text strokes with their baseline-left at `(x, y)`.
+/// Label strokes (LaserGRBL's Hershey font) with their baseline-left at `(x, y)`.
 fn label_at(text: &str, x: f64, y: f64, height_mm: f64) -> Vec<Path> {
-    let mut paths = text_paths(text, height_mm);
-    for p in &mut paths {
-        p.translate(x, y);
-    }
-    paths
-}
-
-/// Default height of new text, mm.
-const TEXT_HEIGHT_MM: f64 = 10.0;
-
-/// The strokes of `text` at the origin (baseline-left), `height_mm` high.
-fn text_paths(text: &str, height_mm: f64) -> Vec<Path> {
-    freekerf_planner::hershey::text_polylines(text, 0.0, 0.0, height_mm)
+    freekerf_text::hershey::text_polylines(text, x, y, height_mm)
         .into_iter()
         .map(|pts| {
             let pts: Vec<Point> = pts.into_iter().map(|(x, y)| Point::new(x, y)).collect();
@@ -904,12 +1078,28 @@ fn text_paths(text: &str, height_mm: f64) -> Vec<Path> {
         .collect()
 }
 
-fn check_height(h: f64) -> Result<f64, ActionError> {
-    if h > 0.0 && h.is_finite() {
-        Ok(h)
-    } else {
-        Err(ActionError::InvalidParams("height_mm must be positive".into()))
+/// Default height of new text, mm.
+const TEXT_HEIGHT_MM: f64 = 10.0;
+
+fn text_failed(e: &freekerf_text::TextError) -> ActionError {
+    match e {
+        freekerf_text::TextError::InvalidSpec(_) | freekerf_text::TextError::UnknownFont(_) => {
+            ActionError::InvalidParams(e.to_string())
+        }
+        _ => ActionError::failed(e.to_string()),
     }
+}
+
+/// A text object of the document.
+fn text_object(d: &mut Document, id: u64) -> Result<(&mut Object, TextSpec), ActionError> {
+    let o = d
+        .object_mut(ObjectId(id))
+        .ok_or_else(|| ActionError::InvalidParams(format!("no object {id}")))?;
+    let spec = o
+        .text
+        .clone()
+        .ok_or_else(|| ActionError::InvalidParams(format!("object {id} is not text")))?;
+    Ok((o, spec))
 }
 
 /// The layer of a new object: the one asked for, else the current one, else a new
@@ -951,6 +1141,14 @@ fn add_native(
     Ok(id)
 }
 
+fn bounds_of_paths(paths: &[Path]) -> Rect {
+    let mut r = Rect::EMPTY;
+    for p in paths {
+        r.union(&p.bounds());
+    }
+    r
+}
+
 fn bounds_of<'a>(objects: impl Iterator<Item = &'a Object>) -> Rect {
     let mut r = Rect::EMPTY;
     for o in objects {
@@ -971,13 +1169,20 @@ fn import_into(
     p: &ImportParams,
     bytes: &[u8],
     current: Option<LayerId>,
+    fonts: &freekerf_text::Fonts,
 ) -> Result<Vec<ObjectId>, ActionError> {
     let (speed, power) = (p.speed_mm_min.unwrap_or(1000), p.power.unwrap_or(1000));
     let (format, imported) = match p.format {
         ImportFormat::Svg => (
             SourceFormat::Svg,
-            freekerf_import::svg::import(bytes, &freekerf_import::svg::SvgOptions::default())
-                .map_err(failed)?,
+            freekerf_import::svg::import(
+                bytes,
+                &freekerf_import::svg::SvgOptions {
+                    fonts: Some(fonts.clone()),
+                    ..freekerf_import::svg::SvgOptions::default()
+                },
+            )
+            .map_err(failed)?,
         ),
         ImportFormat::Dxf => (
             SourceFormat::Dxf,
@@ -1021,13 +1226,15 @@ fn import_into(
         ImportColors::Unify => Some(layer_for_new(doc, None, current)?),
     };
     let mut ids = Vec::new();
-    for o in imported.objects {
+    for o in &imported.objects {
         let layer = unified.unwrap_or_else(|| doc.layer_for_color(o.color, speed, power));
         ids.push(
-            doc.add_object_with(layer, o.kind, String::new(), Some(source.clone()))
+            doc.add_object_with(layer, o.kind.clone(), String::new(), Some(source.clone()))
                 .map_err(failed)?,
         );
     }
+    let added: Vec<Option<ObjectId>> = ids.iter().copied().map(Some).collect();
+    freekerf_import::attach_texts(doc, &imported.objects, &added);
     Ok(ids)
 }
 
@@ -1063,8 +1270,9 @@ pub fn import_file(session: &mut Session, name: &str, bytes: &[u8]) -> Result<Ve
         colors: ImportColors::Keep,
     };
     let mut ids = Vec::new();
+    let fonts = session.fonts().clone();
     session.edit("import", |d, _| {
-        ids = import_into(d, &p, bytes, None)?;
+        ids = import_into(d, &p, bytes, None, &fonts)?;
         Ok::<_, ActionError>(!ids.is_empty())
     })?;
     Ok(ids.into_iter().map(|i| i.0).collect())
@@ -1138,9 +1346,10 @@ pub fn register_session_actions<C: SessionHost>(r: &mut Registry<C>) -> Result<(
             let mut s = lock(c);
             let current = s.current_layer();
             let before: Vec<LayerId> = s.document().layers.iter().map(|l| l.id).collect();
+            let fonts = s.fonts().clone();
             let mut ids = Vec::new();
             s.edit("import", |d, _| {
-                ids = import_into(d, &p, &bytes, current)?;
+                ids = import_into(d, &p, &bytes, current, &fonts)?;
                 Ok::<_, ActionError>(!ids.is_empty())
             })?;
             Ok(Imported::new(s.document(), &before, ids))
@@ -1280,28 +1489,29 @@ pub fn register_session_actions<C: SessionHost>(r: &mut Registry<C>) -> Result<(
     )?;
     r.register(
         "document.add_text",
-        "Writes text in the single-stroke font on a layer (default: the current layer) and selects it; the text stays editable (`document.set_text`). One undo step.",
+        "Writes text on a layer (default: the current layer) and selects it: a font of `fonts.list` (default Relief SingleLine, single-line), its style, alignment, spacing and effects. The text stays editable (`document.set_text`). One undo step.",
         Tier::Edit,
         |c: &C, p: AddTextParams| {
-            let height = check_height(p.height_mm.unwrap_or(TEXT_HEIGHT_MM))?;
             if !(p.x.is_finite() && p.y.is_finite()) {
                 return Err(ActionError::InvalidParams("x and y must be finite".into()));
             }
+            let mut spec = TextSpec::new(
+                p.text.clone(),
+                p.height_mm.unwrap_or(TEXT_HEIGHT_MM),
+                freekerf_text::DEFAULT_FONT,
+            );
+            p.style(&mut spec);
+            freekerf_text::check(&spec).map_err(|e| text_failed(&e))?;
             let mut s = lock(c);
             let current = s.current_layer();
+            let fonts = s.fonts().clone();
             let mut id = ObjectId(0);
             s.edit("add text", |d, sel| {
                 let layer = layer_for_new(d, p.layer, current)?;
                 id = add_native(d, sel, layer, ObjectKind::Shape { paths: Vec::new() }, "text")?;
                 if let Some(o) = d.object_mut(id) {
                     o.transform = Matrix::translation(p.x, p.y);
-                    o.set_text_paths(
-                        TextSpec {
-                            text: p.text.clone(),
-                            height_mm: height,
-                        },
-                        &text_paths(&p.text, height),
-                    );
+                    freekerf_text::apply(o, spec, &fonts).map_err(|e| text_failed(&e))?;
                 }
                 Ok::<_, ActionError>(true)
             })?;
@@ -1310,32 +1520,159 @@ pub fn register_session_actions<C: SessionHost>(r: &mut Registry<C>) -> Result<(
     )?;
     r.register(
         "document.set_text",
-        "Changes a text object's text or font height (its position, rotation and scale stay). One undo step.",
+        "Changes a text object: its text, height, font, style, alignment, spacing, effects, or where it sits on its path (its position, rotation and scale stay). One undo step.",
         Tier::Edit,
         |c: &C, p: SetTextParams| {
-            if let Some(h) = p.height_mm {
-                check_height(h)?;
-            }
-            let changed = lock(c).edit("edit text", |d, _| {
-                let o = d
-                    .object_mut(ObjectId(p.id))
-                    .ok_or_else(|| ActionError::InvalidParams(format!("no object {}", p.id)))?;
-                let old = o
-                    .text
-                    .clone()
-                    .ok_or_else(|| ActionError::InvalidParams(format!("object {} is not text", p.id)))?;
-                let spec = TextSpec {
-                    text: p.text.clone().unwrap_or_else(|| old.text.clone()),
-                    height_mm: p.height_mm.unwrap_or(old.height_mm),
-                };
+            let mut s = lock(c);
+            let fonts = s.fonts().clone();
+            let changed = s.edit("edit text", |d, _| {
+                let (o, old) = text_object(d, p.id)?;
+                let mut spec = old.clone();
+                if let Some(t) = &p.text {
+                    spec.text.clone_from(t);
+                }
+                spec.height_mm = p.height_mm.unwrap_or(spec.height_mm);
+                p.style(&mut spec);
+                if let Some(tp) = spec.path.as_mut() {
+                    tp.offset_mm = p.path_offset_mm.unwrap_or(tp.offset_mm);
+                    tp.distance_mm = p.path_distance_mm.unwrap_or(tp.distance_mm);
+                    tp.flip = p.path_flip.unwrap_or(tp.flip);
+                    // a text on a path is not bent as well
+                    spec.arc_radius_mm = None;
+                } else if p.path_offset_mm.is_some() || p.path_distance_mm.is_some() || p.path_flip.is_some() {
+                    return Err(ActionError::InvalidParams(format!("text {} is not on a path", p.id)));
+                }
                 if spec == old {
                     return Ok(false);
                 }
-                let paths = text_paths(&spec.text, spec.height_mm);
-                o.set_text_paths(spec, &paths);
+                freekerf_text::apply(o, spec, &fonts).map_err(|e| text_failed(&e))?;
                 Ok::<_, ActionError>(true)
             })?;
             Ok(Changed { changed })
+        },
+    )?;
+    r.register(
+        "document.text_on_path",
+        "Puts a text on the first path of a shape: the letters stand along it, and follow it whenever the shape changes (moved, scaled, edited); moving the text alone puts it back on the path. Deleting the shape leaves the text where it was. One undo step.",
+        Tier::Edit,
+        |c: &C, p: TextOnPathParams| {
+            let mut s = lock(c);
+            let fonts = s.fonts().clone();
+            s.edit("text on path", |d, _| {
+                if p.id == p.path {
+                    return Err(ActionError::InvalidParams("a text cannot follow itself".into()));
+                }
+                let baseline = d
+                    .object(ObjectId(p.path))
+                    .ok_or_else(|| ActionError::InvalidParams(format!("no object {}", p.path)))
+                    .and_then(|o| {
+                        freekerf_text::baseline_of(o)
+                            .cloned()
+                            .ok_or_else(|| ActionError::InvalidParams(format!("object {} is not a shape", p.path)))
+                    })?;
+                let (o, mut spec) = text_object(d, p.id)?;
+                spec.arc_radius_mm = None;
+                spec.path = Some(TextPath {
+                    object: Some(ObjectId(p.path)),
+                    path: baseline,
+                    offset_mm: p.offset_mm.unwrap_or(0.0),
+                    distance_mm: p.distance_mm.unwrap_or(0.0),
+                    flip: p.flip.unwrap_or(false),
+                });
+                freekerf_text::apply(o, spec, &fonts).map_err(|e| text_failed(&e))?;
+                Ok::<_, ActionError>(true)
+            })?;
+            Ok(Changed { changed: true })
+        },
+    )?;
+    r.register(
+        "document.text_off_path",
+        "Takes a text off its path: straight again, its baseline starting where the path starts. One undo step.",
+        Tier::Edit,
+        |c: &C, p: TextIdParams| {
+            let mut s = lock(c);
+            let fonts = s.fonts().clone();
+            let changed = s.edit("text off path", |d, _| {
+                let (o, mut spec) = text_object(d, p.id)?;
+                let Some(tp) = spec.path.take() else {
+                    return Ok(false);
+                };
+                let start = o.transform.transform(if tp.flip { tp.path.end() } else { tp.path.start });
+                o.transform = Matrix::translation(start.x, start.y);
+                freekerf_text::apply(o, spec, &fonts).map_err(|e| text_failed(&e))?;
+                Ok::<_, ActionError>(true)
+            })?;
+            Ok(Changed { changed })
+        },
+    )?;
+    r.register(
+        "document.text_to_paths",
+        "Turns texts (default: the selected ones) into plain shapes: the letters stay, the text is no longer editable. One undo step.",
+        Tier::Edit,
+        |c: &C, p: IdsParams| {
+            let mut s = lock(c);
+            let ids = targets(p.ids, &s);
+            let changed = s.edit("text to paths", |d, _| {
+                let mut any = false;
+                for o in d.objects.iter_mut().filter(|o| ids.contains(&o.id) && o.text.is_some()) {
+                    o.text = None;
+                    o.name = "path".into();
+                    any = true;
+                }
+                Ok::<_, ActionError>(any)
+            })?;
+            Ok(Changed { changed })
+        },
+    )?;
+    r.register(
+        "fonts.list",
+        "The font families a text can use: the built-in single-line fonts first, then the installed ones.",
+        Tier::Read,
+        |c: &C, _: NoParams| {
+            Ok(lock(c)
+                .fonts()
+                .families()
+                .into_iter()
+                .map(|f| FontFamily {
+                    name: f.name,
+                    single_line: f.single_line,
+                    builtin: f.builtin,
+                    bold: f.bold,
+                    italic: f.italic,
+                })
+                .collect::<Vec<_>>())
+        },
+    )?;
+    r.register(
+        "fonts.preview",
+        "A sample of a font family as SVG path data (10 mm high, Y down), for font pickers.",
+        Tier::Read,
+        |c: &C, p: FontPreviewParams| {
+            let fonts = lock(c).fonts().clone();
+            let mut spec = TextSpec::new(
+                p.text.unwrap_or_else(|| "AaBbÇç 123".into()),
+                TEXT_HEIGHT_MM,
+                p.family.clone(),
+            );
+            spec.bold = p.bold;
+            spec.italic = p.italic;
+            let paths = freekerf_text::layout(&spec, &fonts).map_err(|e| text_failed(&e))?;
+            let single_line = fonts
+                .face(&p.family, p.bold, p.italic)
+                .map_err(|e| text_failed(&e))?
+                .face
+                .single_line();
+            let b = bounds_of_paths(&paths);
+            let view_box = if b.is_empty() {
+                [0.0, -TEXT_HEIGHT_MM, TEXT_HEIGHT_MM, TEXT_HEIGHT_MM]
+            } else {
+                [b.min_x, -b.max_y, b.width(), b.height()]
+            };
+            Ok(FontPreview {
+                d: freekerf_text::svgpath::to_data(&paths, true),
+                view_box,
+                single_line,
+            })
         },
     )?;
     r.register(
@@ -1410,6 +1747,7 @@ pub fn register_session_actions<C: SessionHost>(r: &mut Registry<C>) -> Result<(
             let mut new = Vec::new();
             s.edit("duplicate", |d, sel| {
                 let copies: Vec<Object> = d.objects.iter().filter(|o| ids.contains(&o.id)).cloned().collect();
+                let mut pairs = Vec::new();
                 for mut o in copies {
                     o.translate(dx, dy);
                     let id = d
@@ -1419,8 +1757,10 @@ pub fn register_session_actions<C: SessionHost>(r: &mut Registry<C>) -> Result<(
                         added.text = o.text;
                         added.transform = o.transform;
                     }
+                    pairs.push((o.id, id));
                     new.push(id);
                 }
+                freekerf_text::relink_copies(d, &pairs);
                 if new.is_empty() {
                     return Ok(false);
                 }
@@ -1638,7 +1978,7 @@ pub fn register_session_actions<C: SessionHost>(r: &mut Registry<C>) -> Result<(
     )?;
     r.register(
         "document.offset",
-        "Adds the outline of shapes (default: the selection) grown or shrunk by `distance_mm`, as new objects on the same layers, selected. One undo step.",
+        "Adds the outline of shapes (default: the selection) grown or shrunk by `distance_mm`, as new objects on the same layers, selected; open paths (single-line text) are outlined around their strokes when growing. One undo step.",
         Tier::Edit,
         |c: &C, p: OffsetParams| {
             if !(p.distance_mm.is_finite() && p.distance_mm != 0.0) {
@@ -1655,21 +1995,30 @@ pub fn register_session_actions<C: SessionHost>(r: &mut Registry<C>) -> Result<(
             };
             let mut new = Vec::new();
             s.edit("offset", |d, sel| {
-                let sources: Vec<(LayerId, Vec<Vec<Point>>)> = d
+                let scale = freekerf_geometry::boolean::DEFAULT_SCALE;
+                // closed paths grow or shrink; open ones (single-line text) are
+                // outlined, with round ends, when growing
+                let sources: Vec<(LayerId, Polylines, Polylines)> = d
                     .objects
                     .iter()
                     .filter(|o| ids.contains(&o.id))
-                    .map(|o| (o.layer, polygons(o)))
-                    .filter(|(_, p)| !p.is_empty())
+                    .map(|o| {
+                        let (closed, open) = open_and_closed(o);
+                        (o.layer, closed, open)
+                    })
+                    .filter(|(_, c, o)| !c.is_empty() || !o.is_empty())
                     .collect();
-                for (layer, polys) in sources {
-                    let out = freekerf_geometry::boolean::offset(
-                        &polys,
-                        p.distance_mm,
-                        join,
-                        freekerf_geometry::boolean::DEFAULT_SCALE,
-                    )
-                    .map_err(geometry_failed)?;
+                for (layer, closed, open) in sources {
+                    let mut out = freekerf_geometry::boolean::offset(&closed, p.distance_mm, join, scale)
+                        .map_err(geometry_failed)?;
+                    if p.distance_mm > 0.0 && !open.is_empty() {
+                        let strokes =
+                            freekerf_geometry::boolean::offset_open(&open, p.distance_mm, POLYGON_TOLERANCE_MM, scale)
+                                .map_err(geometry_failed)?;
+                        out.extend(strokes);
+                        out = freekerf_geometry::boolean::boolean(&out, &[], freekerf_geometry::boolean::Op::Union, scale)
+                            .map_err(geometry_failed)?;
+                    }
                     if out.is_empty() {
                         continue;
                     }
@@ -1717,6 +2066,7 @@ pub fn register_session_actions<C: SessionHost>(r: &mut Registry<C>) -> Result<(
                         if row == 0 && col == 0 {
                             continue;
                         }
+                        let mut pairs = Vec::new();
                         for o in &originals {
                             let mut copy = o.clone();
                             copy.translate(f64::from(col) * sx, -f64::from(row) * sy);
@@ -1727,8 +2077,11 @@ pub fn register_session_actions<C: SessionHost>(r: &mut Registry<C>) -> Result<(
                                 added.text = copy.text;
                                 added.transform = copy.transform;
                             }
+                            pairs.push((o.id, id));
                             new.push(id);
                         }
+                        // each cell's texts follow that cell's paths
+                        freekerf_text::relink_copies(d, &pairs);
                     }
                 }
                 *sel = originals.iter().map(|o| o.id).chain(new.iter().copied()).collect();
@@ -2302,9 +2655,13 @@ mod tests {
         )
         .unwrap();
         assert!(d("document.offset", json!({"distance_mm": 0, "ids": [a]})).is_err());
-        // an open stroke has no area to grow
+        // open strokes (single-line text) are outlined when growing, nothing when shrinking
+        let around =
+            d("document.offset", json!({"distance_mm": 1, "ids": [text]})).unwrap()["ids"][0].clone();
+        let (tb, ab) = (bounds_of(&text), bounds_of(&around));
+        assert!(ab[0] < tb[0] - 0.9 && ab[3] > tb[3] + 0.9, "{tb:?} {ab:?}");
         assert_eq!(
-            d("document.offset", json!({"distance_mm": 1, "ids": [text]})).unwrap()["ids"],
+            d("document.offset", json!({"distance_mm": -1, "ids": [text]})).unwrap()["ids"],
             json!([])
         );
 
@@ -2326,6 +2683,174 @@ mod tests {
         );
         assert!(d("document.array", json!({"columns": 0, "rows": 2})).is_err());
         assert!(d("document.array", json!({"columns": 1000, "rows": 1000})).is_err());
+    }
+
+    #[test]
+    fn text_styles_paths_and_fonts() {
+        let (r, h) = setup();
+        let user = Caller::user();
+        let d = |name: &str, p: Value| r.dispatch(&h, &user, name, p);
+        let object = |id: &Value| {
+            d("session.snapshot", Value::Null).unwrap()["document"]["objects"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|o| o["id"] == *id)
+                .cloned()
+                .unwrap()
+        };
+        let bounds =
+            |id: &Value| -> [f64; 4] { serde_json::from_value(object(id)["bounds"].clone()).unwrap() };
+
+        // fonts: built-in first; a sample to show
+        let fonts = d("fonts.list", Value::Null).unwrap();
+        assert_eq!(fonts[0]["name"], "Relief SingleLine");
+        assert!(
+            fonts
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|f| f["name"] == "Hershey Serif" && f["italic"] == true)
+        );
+        let sample = d("fonts.preview", json!({"family": "Hershey Script"})).unwrap();
+        assert!(sample["d"].as_str().unwrap().starts_with('M') && sample["single_line"] == true);
+        assert!(d("fonts.preview", json!({"family": "Nope"})).is_err());
+
+        // a styled text in one call; the style is kept and changed field by field
+        let text = d(
+            "document.add_text",
+            json!({"text": "Olá\nmundo", "x": 0, "y": 0, "font": "Hershey Serif", "bold": true,
+                   "align": "center", "underline": true}),
+        )
+        .unwrap()["id"]
+            .clone();
+        let spec = object(&text)["text"].clone();
+        assert_eq!(spec["font"], "Hershey Serif");
+        assert_eq!(
+            (spec["bold"].clone(), spec["align"].clone()),
+            (json!(true), json!("center"))
+        );
+        let b = bounds(&text);
+        assert!(
+            b[0] < -5.0 && b[2] > 5.0 && b[1] < -10.0,
+            "centred, two lines: {b:?}"
+        );
+        d(
+            "document.set_text",
+            json!({"id": text, "italic": true, "letter_spacing_mm": 1, "outline_mm": 0.5}),
+        )
+        .unwrap();
+        let spec = object(&text)["text"].clone();
+        assert_eq!(
+            (spec["italic"].clone(), spec["bold"].clone()),
+            (json!(true), json!(true))
+        );
+        d(
+            "document.set_text",
+            json!({"id": text, "outline_mm": 0, "arc_radius_mm": 40}),
+        )
+        .unwrap();
+        let spec = object(&text)["text"].clone();
+        assert!(spec.get("outline_mm").is_none() && spec["arc_radius_mm"] == 40.0);
+        for bad in [
+            json!({"id": text, "font": "Nope"}),
+            json!({"id": text, "line_spacing": 0}),
+            json!({"id": text, "path_offset_mm": 3}),
+        ] {
+            assert!(matches!(
+                d("document.set_text", bad),
+                Err(ActionError::InvalidParams(_))
+            ));
+        }
+        assert!(
+            d(
+                "document.add_text",
+                json!({"text": "x", "x": 0, "y": 0, "width_scale": -1})
+            )
+            .is_err()
+        );
+
+        // on a path: the text follows the shape, and goes back to it when moved alone
+        let line = d(
+            "document.add_shape",
+            json!({"shape": "rect", "x": 0, "y": 50, "width": 200, "height": 1}),
+        )
+        .unwrap()["id"]
+            .clone();
+        let on = d("document.add_text", json!({"text": "ABC", "x": 0, "y": 0})).unwrap()["id"].clone();
+        d(
+            "document.text_on_path",
+            json!({"id": on, "path": line, "offset_mm": 10}),
+        )
+        .unwrap();
+        let b = bounds(&on);
+        assert!(b[1] > 49.0 && b[0] > 9.0 && b[0] < 15.0, "{b:?}");
+        assert_eq!(object(&on)["text"]["path"]["object"], line);
+        d(
+            "document.transform",
+            json!({"ids": [line], "op": {"translate": [0, 30]}}),
+        )
+        .unwrap();
+        assert!(bounds(&on)[1] > 79.0, "followed the shape");
+        d(
+            "document.transform",
+            json!({"ids": [on], "op": {"translate": [100, 100]}}),
+        )
+        .unwrap();
+        let back = bounds(&on);
+        assert!(back[1] > 79.0 && back[1] < 81.0 && back[0] < 15.0, "{back:?}");
+        // both moved together: the text moves once
+        d(
+            "document.transform",
+            json!({"ids": [line, on], "op": {"translate": [0, 10]}}),
+        )
+        .unwrap();
+        assert!((bounds(&on)[1] - back[1] - 10.0).abs() < 0.5);
+        // undo takes the path and the text back in one step
+        d("history.undo", Value::Null).unwrap();
+        assert!((bounds(&on)[1] - back[1]).abs() < 1e-6);
+        d(
+            "document.set_text",
+            json!({"id": on, "path_distance_mm": 2, "path_flip": true}),
+        )
+        .unwrap();
+        assert_eq!(object(&on)["text"]["path"]["flip"], true);
+        assert!(d("document.text_on_path", json!({"id": on, "path": on})).is_err());
+        assert!(d("document.text_on_path", json!({"id": on, "path": text})).is_err());
+        assert!(d("document.text_on_path", json!({"id": line, "path": on})).is_err());
+
+        // copies: with the shape they follow the copy, alone they follow nothing
+        let both = d("document.duplicate", json!({"ids": [line, on]})).unwrap()["ids"].clone();
+        assert_eq!(object(&both[1])["text"]["path"]["object"], both[0]);
+        let alone = d("document.duplicate", json!({"ids": [on]})).unwrap()["ids"][0].clone();
+        assert!(object(&alone)["text"]["path"].get("object").is_none());
+
+        // the shape deleted: the text stays where it was
+        let kept = bounds(&on);
+        d("document.delete", json!({"ids": [line]})).unwrap();
+        assert!(object(&on)["text"]["path"].get("object").is_none());
+        assert_eq!(bounds(&on), kept);
+        // off the path: straight again, from where the path started
+        assert_eq!(
+            d("document.text_off_path", json!({"id": on})).unwrap()["changed"],
+            true
+        );
+        assert!(object(&on)["text"].get("path").is_none());
+        assert_eq!(
+            d("document.text_off_path", json!({"id": on})).unwrap()["changed"],
+            false
+        );
+
+        // texts become plain shapes
+        assert_eq!(
+            d("document.text_to_paths", json!({"ids": [on, line]})).unwrap()["changed"],
+            true
+        );
+        assert_eq!(object(&on)["kind"], "shape");
+        assert_eq!(
+            d("document.text_to_paths", json!({"ids": [on]})).unwrap()["changed"],
+            false
+        );
     }
 
     #[test]
@@ -2399,9 +2924,13 @@ mod tests {
         let (tb, to) = bounds(&text);
         assert_eq!(to["kind"], "text");
         assert_eq!(to["layer"], red["layer"]);
-        assert_eq!(to["text"], json!({"text": "Hi", "height_mm": 10.0}));
+        assert_eq!(
+            to["text"],
+            json!({"text": "Hi", "height_mm": 10.0, "font": "Relief SingleLine"})
+        );
         assert!(
-            tb[0] >= 5.0 - 1e-9 && tb[1] >= 5.0 - 1e-9 && tb[3] <= 15.5,
+            // capitals 10 mm high, the dot of the i a little higher
+            tb[0] >= 5.0 - 1e-9 && tb[1] >= 5.0 - 1e-9 && tb[3] <= 17.0,
             "{tb:?}"
         );
         let first = snap["document"]["layers"][0]["id"].clone();

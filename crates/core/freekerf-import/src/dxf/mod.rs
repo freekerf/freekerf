@@ -879,10 +879,7 @@ pub fn import(bytes: &[u8], options: &DxfOptions) -> Result<Import, ImportError>
         colors,
         objects: paths
             .into_iter()
-            .map(|(color, p)| ImportedObject {
-                color,
-                kind: ObjectKind::Shape { paths: vec![p] },
-            })
+            .map(|(color, p)| ImportedObject::new(color, ObjectKind::Shape { paths: vec![p] }))
             .collect(),
     })
 }

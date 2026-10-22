@@ -45,11 +45,11 @@ interface AppDocument {
    */
   addShape(params: { height: number; layer?: number | null; shape: "rect" | "ellipse"; width: number; x: number; y: number }): { id: number };
   /**
-   * Writes text in the single-stroke font on a layer (default: the current layer) and selects it; the text stays editable (`document.set_text`). One undo step.
+   * Writes text on a layer (default: the current layer) and selects it: a font of `fonts.list` (default Relief SingleLine, single-line), its style, alignment, spacing and effects. The text stays editable (`document.set_text`). One undo step.
    *
    * Action `document.add_text`, tier `edit`.
    */
-  addText(params: { height_mm?: number | null; layer?: number | null; text: string; x: number; y: number }): { id: number };
+  addText(params: { align?: "left" | "center" | "right" | "justify" | null; arc_radius_mm?: number | null; bold?: boolean | null; font?: string | null; height_mm?: number | null; italic?: boolean | null; layer?: number | null; letter_spacing_mm?: number | null; line_spacing?: number | null; outline_mm?: number | null; stencil_mm?: number | null; strikethrough?: boolean | null; text: string; underline?: boolean | null; weld?: boolean | null; width_scale?: number | null; x: number; y: number }): { id: number };
   /**
    * Lines up objects (default: the selection, at least two) on the box around them: left, center_h, right, top, middle_v or bottom. One undo step.
    *
@@ -159,7 +159,7 @@ interface AppDocument {
    */
   "new"(params?: Record<string, unknown>): { changed: boolean };
   /**
-   * Adds the outline of shapes (default: the selection) grown or shrunk by `distance_mm`, as new objects on the same layers, selected. One undo step.
+   * Adds the outline of shapes (default: the selection) grown or shrunk by `distance_mm`, as new objects on the same layers, selected; open paths (single-line text) are outlined around their strokes when growing. One undo step.
    *
    * Action `document.offset`, tier `edit`.
    */
@@ -225,17 +225,35 @@ interface AppDocument {
    */
   setRaster(params: { id: number; settings: { adjustments: { blue: number; brightness: number; contrast: number; formula: "simple_average" | "weight_average" | "optical_correct" | "custom"; green: number; red: number; threshold?: number | null; white_clip: number }; border_speed_mm_min: number; centerline: { corner_threshold?: number | null; line_threshold?: number | null }; direction: "horizontal" | "vertical" | "diagonal"; dithering: "atkinson" | "floyd_steinberg" | "burks" | "jarvis" | "random" | "sierra2" | "sierra3" | "sierra_light" | "stucki"; interpolation: "nearest_neighbor" | "bilinear" | "bicubic" | "high_quality_bilinear" | "high_quality_bicubic"; laser_off: string; laser_on: string; lines_per_mm: number; mark_speed_mm_min: number; max_power: number; min_power: number; tool: "line_to_line" | "dithering" | "vectorize" | "centerline" | "passthrough"; vectorize: { adaptive_quality: boolean; down_sampling?: number | null; fill?: { direction: unknown; kind: "raster" } | { direction: unknown; kind: "hatch" } | null; fill_lines_per_mm: number; optimize?: number | null; optimize_fast: boolean; smoothing?: number | null; spot_removal?: number | null } } }): { changed: boolean };
   /**
-   * Changes a text object's text or font height (its position, rotation and scale stay). One undo step.
+   * Changes a text object: its text, height, font, style, alignment, spacing, effects, or where it sits on its path (its position, rotation and scale stay). One undo step.
    *
    * Action `document.set_text`, tier `edit`.
    */
-  setText(params: { height_mm?: number | null; id: number; text?: string | null }): { changed: boolean };
+  setText(params: { align?: "left" | "center" | "right" | "justify" | null; arc_radius_mm?: number | null; bold?: boolean | null; font?: string | null; height_mm?: number | null; id: number; italic?: boolean | null; letter_spacing_mm?: number | null; line_spacing?: number | null; outline_mm?: number | null; path_distance_mm?: number | null; path_flip?: boolean | null; path_offset_mm?: number | null; stencil_mm?: number | null; strikethrough?: boolean | null; text?: string | null; underline?: boolean | null; weld?: boolean | null; width_scale?: number | null }): { changed: boolean };
   /**
    * Splits shapes (default: the selection) made of several paths into one object per path, on the same layer; texts and images are left as they are. The pieces are selected. One undo step.
    *
    * Action `document.split`, tier `edit`.
    */
   split(params?: { ids?: number[] | null }): { ids: number[] };
+  /**
+   * Takes a text off its path: straight again, its baseline starting where the path starts. One undo step.
+   *
+   * Action `document.text_off_path`, tier `edit`.
+   */
+  textOffPath(params: { id: number }): { changed: boolean };
+  /**
+   * Puts a text on the first path of a shape: the letters stand along it, and follow it whenever the shape changes (moved, scaled, edited); moving the text alone puts it back on the path. Deleting the shape leaves the text where it was. One undo step.
+   *
+   * Action `document.text_on_path`, tier `edit`.
+   */
+  textOnPath(params: { distance_mm?: number | null; flip?: boolean | null; id: number; offset_mm?: number | null; path: number }): { changed: boolean };
+  /**
+   * Turns texts (default: the selected ones) into plain shapes: the letters stay, the text is no longer editable. One undo step.
+   *
+   * Action `document.text_to_paths`, tier `edit`.
+   */
+  textToPaths(params?: { ids?: number[] | null }): { changed: boolean };
   /**
    * The document as `.fkproj` text.
    *
@@ -275,6 +293,21 @@ interface AppFire {
    * Action `fire.request`, tier `machine`.
    */
   request(params: { action: string; params?: unknown }): { action: string; countdown_ms: number; id: number; params: unknown; requested_by: string; summary: { bounds?: number[] | null; code?: string | null; estimated_ms?: number | null; lines?: number | null; program?: string | null } };
+}
+
+interface AppFonts {
+  /**
+   * The font families a text can use: the built-in single-line fonts first, then the installed ones.
+   *
+   * Action `fonts.list`, tier `read`.
+   */
+  list(params?: Record<string, unknown>): ({ bold: boolean; builtin: boolean; italic: boolean; name: string; single_line: boolean })[];
+  /**
+   * A sample of a font family as SVG path data (10 mm high, Y down), for font pickers.
+   *
+   * Action `fonts.preview`, tier `read`.
+   */
+  preview(params: { bold?: boolean; family: string; italic?: boolean; text?: string | null }): { d: string; single_line: boolean; view_box: number[] };
 }
 
 interface AppHistory {
@@ -493,7 +526,7 @@ interface AppSession {
    *
    * Action `session.snapshot`, tier `read`.
    */
-  snapshot(params?: Record<string, unknown>): { clipboard: number; current_layer?: number | null; dirty: boolean; document: { bounds?: number[] | null; layers: ({ color: string; fill: { lines_per_mm: number; pattern: "horizontal" | "vertical" | "diagonal" | "reverse_diagonal" | "grid" | "diagonal_grid" | "cross" | "diagonal_cross" | "squares" | "zig_zag" | "hilbert" | "inset" }; id: number; laser_mode: "machine" | "constant" | "dynamic"; mode: "line" | "fill" | "fill_and_line" | "cut" | "ignore"; name: string; objects: number; passes: number; power: number; speed_mm_min: number; visible: boolean })[]; objects: ({ bounds?: number[] | null; id: number; image?: { dithering: unknown; lines_per_mm: number; tool: unknown } | null; kind: string; layer: number; name: string; text?: { height_mm: number; text: string } | null; transform: number[] })[] }; document_revision: number; redo: string[]; revision: number; selection: number[]; undo: string[]; view: { dialogs: ("settings" | "shortcuts" | "fire_confirmation" | "recover" | "welcome" | "import" | "raster" | "material_test" | "about")[]; drawer_open: boolean; fire_request?: { action: string; countdown_ms: number; id: number; params: unknown; requested_by: string; summary: { bounds?: number[] | null; code?: string | null; estimated_ms?: number | null; lines?: number | null; program?: string | null } } | null; fit_request: number; focus?: string | null; mode: "design" | "produce"; panel: "layers" | "object" | "machine" | "console"; toasts: ({ args?: Record<string, unknown>; id: number; level: "info" | "ok" | "warning" | "error"; message: string })[]; tool: "select" | "rect" | "ellipse" | "text"; viewport?: { center: number[]; zoom: number } | null } };
+  snapshot(params?: Record<string, unknown>): { clipboard: number; current_layer?: number | null; dirty: boolean; document: { bounds?: number[] | null; layers: ({ color: string; fill: { lines_per_mm: number; pattern: "horizontal" | "vertical" | "diagonal" | "reverse_diagonal" | "grid" | "diagonal_grid" | "cross" | "diagonal_cross" | "squares" | "zig_zag" | "hilbert" | "inset" }; id: number; laser_mode: "machine" | "constant" | "dynamic"; mode: "line" | "fill" | "fill_and_line" | "cut" | "ignore"; name: string; objects: number; passes: number; power: number; speed_mm_min: number; visible: boolean })[]; objects: ({ bounds?: number[] | null; id: number; image?: { dithering: unknown; lines_per_mm: number; tool: unknown } | null; kind: string; layer: number; name: string; text?: { align?: unknown; arc_radius_mm?: number | null; bold?: boolean; font?: string; height_mm: number; italic?: boolean; letter_spacing_mm?: number; line_spacing?: number; outline_mm?: number | null; path?: unknown; stencil_mm?: number | null; strikethrough?: boolean; text: string; underline?: boolean; weld?: boolean; width_scale?: number } | null; transform: number[] })[] }; document_revision: number; redo: string[]; revision: number; selection: number[]; undo: string[]; view: { dialogs: ("settings" | "shortcuts" | "fire_confirmation" | "recover" | "welcome" | "import" | "raster" | "material_test" | "about")[]; drawer_open: boolean; fire_request?: { action: string; countdown_ms: number; id: number; params: unknown; requested_by: string; summary: { bounds?: number[] | null; code?: string | null; estimated_ms?: number | null; lines?: number | null; program?: string | null } } | null; fit_request: number; focus?: string | null; mode: "design" | "produce"; panel: "layers" | "object" | "machine" | "console"; toasts: ({ args?: Record<string, unknown>; id: number; level: "info" | "ok" | "warning" | "error"; message: string })[]; tool: "select" | "rect" | "ellipse" | "text"; viewport?: { center: number[]; zoom: number } | null } };
 }
 
 interface AppSettings {
@@ -601,6 +634,7 @@ declare const app: {
   readonly console: AppConsole;
   readonly document: AppDocument;
   readonly fire: AppFire;
+  readonly fonts: AppFonts;
   readonly history: AppHistory;
   readonly job: AppJob;
   readonly machine: AppMachine;

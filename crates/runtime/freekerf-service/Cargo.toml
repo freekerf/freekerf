@@ -26,6 +26,7 @@ freekerf-raster.workspace = true
 freekerf-script.workspace = true
 freekerf-session.workspace = true
 freekerf-settings.workspace = true
+freekerf-text.workspace = true
 freekerf-transport.workspace = true
 schemars.workspace = true
 sha2.workspace = true

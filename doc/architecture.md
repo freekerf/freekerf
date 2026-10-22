@@ -19,7 +19,7 @@ flowchart TB
   end
   subgraph native
     transport[freekerf-transport<br/>serial, emulator, PTY]
-    platform[freekerf-platform<br/>dirs, atomic writes, programs]
+    platform[freekerf-platform<br/>dirs, atomic writes, programs,<br/>installed fonts]
   end
   subgraph config
     settings[freekerf-settings<br/>settings.toml, schema, migrations]
@@ -36,6 +36,7 @@ flowchart TB
     planner[freekerf-planner<br/>document to G-code]
     import[freekerf-import<br/>SVG, DXF to document]
     raster[freekerf-raster<br/>image ops, dithering, Line2Line,<br/>Potrace, centerline request]
+    text[freekerf-text<br/>fonts, shaping, text layout,<br/>text on a path]
   end
   cli --> service
   cli --> settings
@@ -64,6 +65,13 @@ flowchart TB
   import --> document
   raster --> gcode
   raster --> geometry
+  text --> document
+  text --> geometry
+  text --> gcode
+  import --> text
+  planner --> text
+  session --> text
+  platform --> text
   service --> raster
   service --> migrate
   migrate --> settings
@@ -72,7 +80,7 @@ flowchart TB
 
 | Layer | Crates | Rule |
 | --- | --- | --- |
-| core | gcode, protocol, emulator, session, geometry, document, planner, import, raster | no I/O, no threads of their own, no clock; builds for `wasm32-unknown-unknown` |
+| core | gcode, protocol, emulator, session, geometry, document, planner, import, raster, text | no I/O, no threads of their own, no clock; builds for `wasm32-unknown-unknown` |
 | config | settings, materials, migrate | core and config; settings files through the `SettingsStore` trait (materials reads package files with `freekerf-library`) |
 | native | transport, platform | core only |
 | runtime | machine, service | core, config, native |

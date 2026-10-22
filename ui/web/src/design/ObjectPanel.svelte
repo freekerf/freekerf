@@ -1,6 +1,7 @@
 <script lang="ts">
   // The inspector of the selection (design/design-system.md "Objeto"): position by
-  // the centre, size, rotation, text, layer, align, duplicate, delete. Each edit is
+  // the centre, size, rotation, text (TextPanel; a text and a shape: put the text
+  // on the shape's path), layer, align, duplicate, delete. Each edit is
   // one `document.*` action; "keep proportions" is a local preference of the panel.
   import type { AlignHow, BooleanOp, TransformOp } from '../gen/api';
   import { app } from '../context';
@@ -9,6 +10,7 @@
   import type { DocumentProjection } from '../state/document.svelte';
   import { PALETTE_COLORS, assignColor, layerCode } from './layers';
   import NumField from './NumField.svelte';
+  import TextPanel from './TextPanel.svelte';
   import { rotationOf, selectionBox } from './transform';
 
   let { doc }: { doc: DocumentProjection } = $props();
@@ -27,6 +29,13 @@
   const cy = $derived(box ? box.y + box.height / 2 : 0);
   const rot = $derived(sel.length === 1 ? rotationOf(sel[0]!.transform) : 0);
   const text = $derived(sel.length === 1 && sel[0]!.kind === 'text' ? sel[0]! : null);
+  /** A text and a shape selected: the text can go on the shape's path. */
+  const onPath = $derived.by(() => {
+    if (sel.length !== 2) return null;
+    const words = sel.find((o) => o.kind === 'text');
+    const shape = sel.find((o) => o.kind === 'shape');
+    return words && shape ? { text: words.id, path: shape.id } : null;
+  });
   const inch = $derived(settings.ui.units === 'in');
   const lenUnit = $derived(inch ? 'in' : 'mm');
   const lenScale = $derived(inch ? 25.4 : 1);
@@ -146,26 +155,17 @@
     {/if}
 
     {#if text?.text}
-      <div class="field">
-        <label for="obj-text">{t('obj-text')}</label>
-        <textarea
-          id="obj-text"
-          class="textarea"
-          rows="2"
-          value={text.text.text}
-          onchange={(e) =>
-            run(() =>
-              doc.service.dispatch('document.set_text', { id: text.id, text: e.currentTarget.value || ' ' }),
-            )}></textarea>
-      </div>
-      <NumField
-        label={t('obj-size')}
-        value={text.text.height_mm}
-        unit={lenUnit}
-        scale={lenScale}
-        min={0.5}
-        oncommit={(v) => run(() => doc.service.dispatch('document.set_text', { id: text.id, height_mm: v }))}
-      />
+      <TextPanel {doc} object={text} />
+    {/if}
+    {#if onPath}
+      <button
+        class="btn"
+        title={t('text-on-path-hint')}
+        data-testid="text-on-path"
+        onclick={() =>
+          run(() => doc.service.dispatch('document.text_on_path', { id: onPath.text, path: onPath.path }))}
+        ><Icon name="text" /><span>{t('text-put-on-path')}</span></button
+      >
     {/if}
 
     <div class="field">
