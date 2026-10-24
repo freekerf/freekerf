@@ -55,6 +55,32 @@ for the Design mode screens until M2 lands.
   policy only allows the app's own resources and the IPC.
 - The app makes no network calls (no telemetry, no update checks).
 
+## Logs
+
+Each run writes `freekerf.log` in the `logs` folder of the data directory
+(`%APPDATA%\FreeKerf\freekerf\data\logs` on Windows,
+`~/.local/share/freekerf/logs` on Linux,
+`~/Library/Application Support/org.FreeKerf.freekerf/logs` on macOS;
+`$FREEKERF_HOME/logs` when set). The logs of the five runs before are kept as
+`freekerf.1.log` (the latest) to `freekerf.5.log`, and a file past 20 MB is
+rotated the same way while the app runs. The log stays on the computer: the app
+never sends it anywhere.
+
+What the file records by default (`info,freekerf_machine=debug`):
+
+- the start (version, system, process id) and the end of the run;
+- every action of tier `safety`, `machine` or `laser`, with its caller and its
+  parameters (cut after 300 characters), confirmed laser actions, and every
+  failed action with its error;
+- the link (connected, disconnected), machine status changes, job start and end,
+  issues, and each console row: commands sent (`> G0 X10`), answers (`< ok`,
+  `< error:22: …`) and board messages (alarms, settings);
+- any panic, with its place, thread and backtrace. A Windows release build has no
+  console, so this is the only place a crash is written.
+
+`RUST_LOG` replaces that filter (`RUST_LOG=debug` adds every action); standard
+error shows warnings and errors, or `RUST_LOG` when set. Times are UTC.
+
 ## Types
 
 The TypeScript types of actions (parameters, results, tiers), events and settings

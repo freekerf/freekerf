@@ -15,6 +15,10 @@ All notable changes to FreeKerf are documented here. The format follows
 - Design mode: images show on the canvas as they will be engraved (a preview of
   at most 1000 px; the job keeps the full resolution), and importing an image
   selects it and opens its raster dialog.
+- Desktop app: a log file per run in the data directory's `logs` folder (five
+  earlier runs kept, 20 MB at most each): actions that move the machine or fire
+  the laser, failed actions, link and status changes, console rows and panics with
+  their backtrace, so a crash or an odd move can be read afterwards.
 
 ### Fixed
 

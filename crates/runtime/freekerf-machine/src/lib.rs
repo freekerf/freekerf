@@ -378,7 +378,42 @@ impl Io {
     }
 
     fn publish(&self, e: &MachineEvent) {
+        log_event(e);
         let mut subs = self.subscribers.lock().unwrap_or_else(PoisonError::into_inner);
         subs.retain(|s| s.send(e.clone()).is_ok());
     }
+}
+
+/// Logs what the machine did: link and state changes and problems at `info` and
+/// `warn`, every console row (commands sent, answers, board messages) at `debug`.
+fn log_event(e: &MachineEvent) {
+    use freekerf_protocol::ConsoleRow;
+    match e {
+        MachineEvent::Connected { transport } => tracing::info!("connected: {transport}"),
+        MachineEvent::Disconnected { user } => tracing::info!(user, "disconnected"),
+        MachineEvent::Host(Event::StatusChanged { old, new }) => {
+            tracing::info!("status {old:?} -> {new:?}");
+        }
+        MachineEvent::Host(Event::Issue(issue)) => tracing::warn!("issue: {issue:?}"),
+        MachineEvent::Host(Event::Console(ConsoleRow::Command { text, .. })) => {
+            tracing::debug!("> {text}");
+        }
+        MachineEvent::Host(Event::Console(ConsoleRow::Result { result, decoded, .. })) => {
+            tracing::debug!("< {result}{}", suffix(decoded.as_deref()));
+        }
+        MachineEvent::Host(Event::Console(ConsoleRow::Message {
+            kind, text, decoded, ..
+        })) => tracing::debug!("< {text}{} ({kind:?})", suffix(decoded.as_deref())),
+        MachineEvent::Host(
+            Event::OverridesChanged(_)
+            | Event::ConsoleCleared
+            | Event::SettingsChanged
+            | Event::LoopCountChanged(_),
+        ) => tracing::debug!("{e:?}"),
+        MachineEvent::Host(other) => tracing::info!("{other:?}"),
+    }
+}
+
+fn suffix(decoded: Option<&str>) -> String {
+    decoded.map(|d| format!(": {d}")).unwrap_or_default()
 }

@@ -4,12 +4,20 @@
 
 pub mod bench;
 pub mod bridge;
+pub mod logging;
 
 /// Starts the app (blocks until the last window closes).
 pub fn run() {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .try_init();
+    let home = std::env::var_os("FREEKERF_HOME").map(std::path::PathBuf::from);
+    let log = logging::init(freekerf_service::Stores::log_dir(home.as_deref()).as_deref());
+    tracing::info!(
+        version = env!("CARGO_PKG_VERSION"),
+        os = std::env::consts::OS,
+        arch = std::env::consts::ARCH,
+        pid = std::process::id(),
+        log = ?log,
+        "FreeKerf starting"
+    );
     let bridge = match bridge::Bridge::from_env() {
         Ok(b) => b,
         Err(e) => {
@@ -47,8 +55,9 @@ pub fn run() {
             Ok(())
         })
         .run(tauri::generate_context!());
-    if let Err(e) = result {
-        tracing::error!("the app stopped with an error: {e}");
+    match result {
+        Ok(()) => tracing::info!("FreeKerf closed"),
+        Err(e) => tracing::error!("the app stopped with an error: {e}"),
     }
 }
 

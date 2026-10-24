@@ -239,6 +239,15 @@ impl Stores {
             None => freekerf_platform::Dirs::user().ok().map(|d| d.settings_file()),
         }
     }
+
+    /// Directory of the app's log files, if any.
+    #[must_use]
+    pub fn log_dir(dir: Option<&Path>) -> Option<std::path::PathBuf> {
+        match dir {
+            Some(d) => Some(freekerf_platform::Dirs::under(d).logs_dir()),
+            None => freekerf_platform::Dirs::user().ok().map(|d| d.logs_dir()),
+        }
+    }
 }
 
 /// A file store (settings or cache) in the platform directories.
@@ -325,6 +334,18 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// Parameters as compact JSON for the log, cut after [`BRIEF_CHARS`] characters
+/// (a program sent with `machine.send` can be long).
+fn brief(params: &Value) -> String {
+    let text = params.to_string();
+    match text.char_indices().nth(BRIEF_CHARS) {
+        Some((at, _)) => format!("{}… ({} bytes)", &text[..at], text.len()),
+        None => text,
+    }
+}
+
+const BRIEF_CHARS: usize = 300;
+
 /// Error of service setup.
 #[derive(Debug, thiserror::Error)]
 pub enum ServiceError {
@@ -397,10 +418,19 @@ impl Service {
     /// # Errors
     /// See [`ActionError`].
     pub fn dispatch(&self, caller: &Caller, action: &str, params: Value) -> Result<Value, ActionError> {
-        tracing::debug!(caller = %caller.name, action, "dispatch");
+        let tier = self.registry.spec(action).map(|s| s.tier);
+        if matches!(tier, Some(Tier::Safety | Tier::Machine | Tier::Laser)) {
+            // what the machine was asked to do: read back after an odd move or a crash
+            tracing::info!(caller = %caller.name, action, params = %brief(&params), "dispatch");
+        } else {
+            tracing::debug!(caller = %caller.name, action, "dispatch");
+        }
         permissions::check_agent_files(caller, action, &params)?;
         permissions::check_agent_laser(caller, action)?;
         let r = self.registry.dispatch(&self.inner, caller, action, params);
+        if let Err(e) = &r {
+            tracing::warn!(caller = %caller.name, action, "action failed: {e}");
+        }
         self.inner.publish_session_events();
         self.inner
             .log_action(caller, action, r.as_ref().err().map(ToString::to_string));
@@ -1813,4 +1843,18 @@ fn load_program(
     *lock(&s.loaded) = Some(loaded);
     s.publish(&ServiceEvent::ProgramLoaded);
     Ok(info)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn brief_params_are_cut() {
+        assert_eq!(brief(&serde_json::json!({"a": 1})), r#"{"a":1}"#);
+        let long = Value::String("é".repeat(BRIEF_CHARS * 2));
+        let b = brief(&long);
+        assert!(b.ends_with(&format!("… ({} bytes)", long.to_string().len())));
+        assert_eq!(b.chars().take_while(|&c| c != '…').count(), BRIEF_CHARS);
+    }
 }

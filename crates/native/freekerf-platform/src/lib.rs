@@ -105,6 +105,12 @@ impl Dirs {
     pub fn fonts_dir(&self) -> PathBuf {
         self.data.join("fonts")
     }
+
+    /// The app's log files (the current run and a few earlier ones).
+    #[must_use]
+    pub fn logs_dir(&self) -> PathBuf {
+        self.data.join("logs")
+    }
 }
 
 /// Writes `contents` to `path` atomically: a temporary file in the same directory
@@ -257,6 +263,7 @@ mod tests {
         let d = Dirs::under(Path::new("/tmp/fk"));
         assert_eq!(d.settings_file(), PathBuf::from("/tmp/fk/settings.toml"));
         assert_eq!(d.data_file("x"), PathBuf::from("/tmp/fk/x"));
+        assert_eq!(d.logs_dir(), PathBuf::from("/tmp/fk/logs"));
         assert!(Dirs::user().is_ok());
         let e = PlatformError::NoConfigDir;
         assert!(e.to_string().contains("configuration"));
